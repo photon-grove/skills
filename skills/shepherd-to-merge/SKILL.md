@@ -15,8 +15,9 @@ reviews. The goal is to satisfy all merge requirements legitimately.
 
 **Review threads:** Every actionable line-level review comment (humans, Copilot, other bots) must
 receive a **public inline reply** on GitHub explaining the outcome (what changed, with enough
-pointer to find it, or why you did not change code) **before** you resolve the thread. Silent
-resolves are treated as a process failure even when the diff is correct.
+context for reviewers to find it—e.g. commit subject or SHA—or why you did not change code)
+**before** you resolve the thread. Silent resolves are treated as a process failure even when the
+diff is correct.
 
 **Multi-agent safety:** Multiple agents may be shepherding different PRs in parallel. Expect the
 base branch to move frequently as other agents merge. The rebase retry loop in step 10 handles this.
@@ -151,9 +152,12 @@ For each piece of actionable feedback (from the subagent review, human reviewers
    hunting the diff. Use the REST API on the review comment id from the comments listing, for
    example:
    ```sh
-   gh api -X POST "repos/<owner>/<repo>/pulls/<number>/comments/<comment-id>/replies" -f body='...'
+   gh api -X POST "repos/<owner>/<repo>/pulls/comments/<comment-id>/replies" -f body='...'
    ```
-   Or use equivalent GraphQL if the repo’s automation prefers it. Top-level PR comments (not tied
+   Use the numeric `id` from the PR review-comments listing (`.../pulls/<number>/comments`); the
+   reply endpoint is keyed by that comment id (`.../pulls/comments/{id}/replies`), not by embedding
+   the PR number before `comments`. Or use equivalent GraphQL if the repo’s automation prefers it.
+   Top-level PR comments (not tied
    to a line) may use `gh pr comment` or issue comment APIs; the requirement is the same — a
    **public** explanation tied to the feedback, not a silent resolve.
 5. **Resolve the review thread** only after that reply exists (when the repo uses resolved threads
@@ -190,9 +194,10 @@ reply exists on that thread** (same policy as step 6: silent resolves look like 
    ```
 
 2. For each unresolved thread: if there is not already a **public reply from you** on that thread
-   documenting the outcome (fix with enough pointer for reviewers, or explained decline), post one
-   first — e.g. `gh api -X POST "repos/<owner>/<repo>/pulls/<number>/comments/<comment-id>/replies"`
-   with `-f body='...'` — then resolve:
+   documenting the outcome (what you fixed with enough context for reviewers to verify, or an
+   explained decline), post one first — e.g.
+   `gh api -X POST "repos/<owner>/<repo>/pulls/comments/<comment-id>/replies"` with `-f body='...'`
+   — then resolve:
    ```sh
    gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { isResolved } } }'
    ```
