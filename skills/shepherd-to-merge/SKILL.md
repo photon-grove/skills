@@ -13,6 +13,12 @@ protection rules or security constraints.
 **Important:** Never use admin privileges to bypass branch protections, force-merge, or dismiss
 reviews. The goal is to satisfy all merge requirements legitimately.
 
+**Review threads:** Every actionable line-level review comment (humans, Copilot, other bots) must
+receive a **public inline reply** on GitHub explaining the outcome (what changed, with enough
+context for reviewers to find it—e.g. commit subject or SHA—or why you did not change code)
+**before** you resolve the thread. Silent resolves are treated as a process failure even when the
+diff is correct.
+
 **Multi-agent safety:** Multiple agents may be shepherding different PRs in parallel. Expect the
 base branch to move frequently as other agents merge. The rebase retry loop in step 10 handles this.
 Each agent works on its own PR branch and does not modify branches belonging to other sessions.
@@ -123,28 +129,60 @@ gh api repos/<owner>/<repo>/pulls/<number>/comments --jq '.[] | {id, node_id, pa
 gh api repos/<owner>/<repo>/pulls/<number>/reviews --jq '.[] | {id, node_id, state, body, user: .user.login}'
 ```
 
+**Public reply before resolve (merge shepherding policy):** Do not treat a review thread as “done”
+without a **public inline reply on GitHub** on that comment or thread. Resolving threads with no
+reply looks like ignored feedback even when the code was fixed; many repos (including companion
+`AGENTS.md` guidance) expect a short explanation on the thread when it is resolved. This applies to
+**every actionable PR review comment**, including Copilot and other bots: after you fix code **or**
+after you decide not to change behavior, post the reply **first**, then resolve (on repos that use
+resolved threads as a merge gate). Declining a suggestion is fine when explained — the reply is
+still required.
+
 For each piece of actionable feedback (from the subagent review, human reviewers, or Copilot):
 
-1. **Fix the issue** in the local checkout — edit the file, make the correction
-2. **Commit the fix** with a clear message referencing the feedback
-3. **Resolve the review thread** if it's a PR review comment thread. First, find the thread ID for
-   the comment, then resolve it:
+1. **Fix the issue** in the local checkout — edit the file, make the correction (or decide not to
+   change behavior and prepare the explanation for item 4 below).
+2. **Commit the fix** with a clear message referencing the feedback (skip a code commit only when
+   the outcome is explanation-only, e.g. out of scope or incorrect suggestion).
+3. **Push** the branch so the updated diff (if any) is visible on GitHub before you reply.
+4. **Post an inline reply** on the review comment or thread **before** resolving it. The reply must
+   state clearly **what** you did (e.g. behavior changed, commit subject or SHA so reviewers need
+   not diff-hunt) **or** **why** you did not implement the suggestion (out of scope, wrong
+   suggestion, intentional tradeoff) with enough detail for a reviewer to understand without
+   hunting the diff. Use the REST API on the review comment id from the comments listing, for
+   example:
    ```sh
-   # Get the thread ID from a review comment's node_id
-   gh api graphql -f query='query { node(id: "<comment-node-id>") { ... on PullRequestReviewComment { pullRequestReviewThread { id } } } }' --jq '.data.node.pullRequestReviewThread.id'
+   gh api -X POST "repos/<owner>/<repo>/pulls/<number>/comments/<comment-id>/replies" -f body='...'
+   ```
+   Use the numeric `id` from the PR review-comments listing (`GET .../pulls/<number>/comments`).
+   Note: a comment’s `url` field uses `.../pulls/comments/{id}` for **GET**, but **creating a
+   reply** requires the pull number in the path (`.../pulls/<number>/comments/<comment-id>/replies`);
+   omitting `<number>` returns 404. Or use equivalent GraphQL if the repo’s automation prefers it.
+   Top-level PR comments (not tied
+   to a line) may use `gh pr comment` or issue comment APIs; the requirement is the same — a
+   **public** explanation tied to the feedback, not a silent resolve.
+5. **Resolve the review thread** only after that reply exists (when the repo uses resolved threads
+   as a merge gate). `PullRequestReviewComment` no longer exposes `pullRequestReviewThread` on the
+   `node(id: …)` query — list `reviewThreads` on the pull request and pick the thread whose
+   `comments` include that comment’s GraphQL `node_id` from the REST listing:
+   ```sh
+   # thread id (PRRT_...) for a review comment's node_id (PRRC_... from REST)
+   gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { pullRequest(number: <number>) { reviewThreads(first: 100) { nodes { id comments(first: 50) { nodes { id } } } } } } } }' \
+     --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select([.comments.nodes[].id] | index("<comment-node-id>")) | .id][0]'
 
    # Resolve the thread
    gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { isResolved } } }'
    ```
-4. **Push the fixes** to the PR branch
 
-If any feedback requires clarification or is outside the scope of the PR, leave a reply comment
-explaining why it wasn't addressed rather than ignoring it.
+If any feedback requires clarification or is outside the scope of the PR, use item 4 to explain why
+it was not implemented — **then** resolve the thread if appropriate; do not resolve without that
+public reply.
 
 ### 7. Resolve all review threads
 
 Before proceeding, ensure every review thread on the PR is resolved. Unresolved threads block
-auto-merge on repos with branch protection.
+auto-merge on repos with branch protection. **Do not resolve any thread until step 6’s public inline
+reply exists on that thread** (same policy as step 6: silent resolves look like ignored feedback).
 
 1. **List all review threads** and check for unresolved ones:
    ```sh
@@ -159,12 +197,18 @@ auto-merge on repos with branch protection.
    }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)'
    ```
 
-2. For each unresolved thread where the feedback was addressed in a commit, resolve it:
+2. For each unresolved thread: if there is not already a **public reply from you** on that thread
+   documenting the outcome (what you fixed with enough context for reviewers to verify, or an
+   explained decline), post one first — e.g.
+   `gh api -X POST "repos/<owner>/<repo>/pulls/<number>/comments/<comment-id>/replies"` with
+   `-f body='...'` — then resolve:
    ```sh
    gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { isResolved } } }'
    ```
 
-3. For threads where the feedback was not addressed, leave a reply comment explaining why.
+3. Threads where the feedback was not implemented still require that explanatory reply before
+   resolve (out of scope, wrong suggestion, tradeoff); declining with explanation satisfies the
+   policy — resolving without any reply does not.
 
 ### 8. Re-review after fixes
 
@@ -256,8 +300,9 @@ is needed.
 **Copilot review note:** GitHub Copilot provides a single automated review when the PR is first
 created. It does **not** re-review after subsequent pushes. Do not request new Copilot reviews or
 wait for Copilot to review new commits — it won't happen. Copilot review is not a merge gate.
-If Copilot left review comments, treat them like any other review thread: address or respond to
-the feedback and resolve the thread. If `mergeStateStatus` remains `BLOCKED` after all threads
+If Copilot left review comments, treat them like any other review thread: address or respond with
+a **public inline reply**, then resolve the thread — never resolve Copilot (or any) threads without
+that reply. If `mergeStateStatus` remains `BLOCKED` after all threads
 are resolved and CI is green, the issue is likely unrelated to Copilot (check for ruleset
 requirements, workflow file scope restrictions, or other branch protection rules).
 
@@ -267,6 +312,8 @@ Print a summary:
 
 - **PR:** title and URL
 - **Review:** findings from the subagent review
+- **Review threads:** confirm each thread got an inline reply (implementation or explained decline)
+  before resolve
 - **Fixes applied:** list of commits pushed to address feedback
 - **CI status:** all checks passing
 - **Merge:** auto-merge enabled, will merge when all requirements are met
