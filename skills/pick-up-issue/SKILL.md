@@ -351,6 +351,9 @@ Invoke the shepherd skill to handle review, feedback, CI, and merge:
 /shepherd-to-merge <owner>/<repo>#<pr-number>
 ```
 
+The shepherd skill requires a **public inline reply on each review comment** (what you fixed or why
+not) before resolving threads; follow that workflow end to end.
+
 Wait for the shepherd process to complete. If it encounters issues it cannot resolve, surface them
 to the user.
 
