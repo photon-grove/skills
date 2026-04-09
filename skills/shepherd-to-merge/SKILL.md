@@ -162,10 +162,13 @@ For each piece of actionable feedback (from the subagent review, human reviewers
    to a line) may use `gh pr comment` or issue comment APIs; the requirement is the same — a
    **public** explanation tied to the feedback, not a silent resolve.
 5. **Resolve the review thread** only after that reply exists (when the repo uses resolved threads
-   as a merge gate). Find the thread ID from the comment’s `node_id`, then resolve:
+   as a merge gate). `PullRequestReviewComment` no longer exposes `pullRequestReviewThread` on the
+   `node(id: …)` query — list `reviewThreads` on the pull request and pick the thread whose
+   `comments` include that comment’s GraphQL `node_id` from the REST listing:
    ```sh
-   # Get the thread ID from a review comment's node_id
-   gh api graphql -f query='query { node(id: "<comment-node-id>") { ... on PullRequestReviewComment { pullRequestReviewThread { id } } } }' --jq '.data.node.pullRequestReviewThread.id'
+   # thread id (PRRT_...) for a review comment's node_id (PRRC_... from REST)
+   gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { pullRequest(number: <number>) { reviewThreads(first: 100) { nodes { id comments(first: 50) { nodes { id } } } } } } } }' \
+     --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select([.comments.nodes[].id] | index("<comment-node-id>")) | .id][0]'
 
    # Resolve the thread
    gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { isResolved } } }'
