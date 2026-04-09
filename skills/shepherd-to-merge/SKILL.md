@@ -152,11 +152,12 @@ For each piece of actionable feedback (from the subagent review, human reviewers
    hunting the diff. Use the REST API on the review comment id from the comments listing, for
    example:
    ```sh
-   gh api -X POST "repos/<owner>/<repo>/pulls/comments/<comment-id>/replies" -f body='...'
+   gh api -X POST "repos/<owner>/<repo>/pulls/<number>/comments/<comment-id>/replies" -f body='...'
    ```
-   Use the numeric `id` from the PR review-comments listing (`.../pulls/<number>/comments`); the
-   reply endpoint is keyed by that comment id (`.../pulls/comments/{id}/replies`), not by embedding
-   the PR number before `comments`. Or use equivalent GraphQL if the repo’s automation prefers it.
+   Use the numeric `id` from the PR review-comments listing (`GET .../pulls/<number>/comments`).
+   Note: a comment’s `url` field uses `.../pulls/comments/{id}` for **GET**, but **creating a
+   reply** requires the pull number in the path (`.../pulls/<number>/comments/<comment-id>/replies`);
+   omitting `<number>` returns 404. Or use equivalent GraphQL if the repo’s automation prefers it.
    Top-level PR comments (not tied
    to a line) may use `gh pr comment` or issue comment APIs; the requirement is the same — a
    **public** explanation tied to the feedback, not a silent resolve.
@@ -196,8 +197,8 @@ reply exists on that thread** (same policy as step 6: silent resolves look like 
 2. For each unresolved thread: if there is not already a **public reply from you** on that thread
    documenting the outcome (what you fixed with enough context for reviewers to verify, or an
    explained decline), post one first — e.g.
-   `gh api -X POST "repos/<owner>/<repo>/pulls/comments/<comment-id>/replies"` with `-f body='...'`
-   — then resolve:
+   `gh api -X POST "repos/<owner>/<repo>/pulls/<number>/comments/<comment-id>/replies"` with
+   `-f body='...'` — then resolve:
    ```sh
    gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { isResolved } } }'
    ```
