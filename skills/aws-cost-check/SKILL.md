@@ -46,9 +46,10 @@ Examples:
 - **Region + account scope:** Cost Explorer is global and may include multiple linked accounts and
   regions. Resource enumeration is per-account/per-region. Always identify these scope boundaries in
   the final attribution section.
-- **Cursor/Codex sandbox note:** In tool-sandboxed environments, AWS CLI SSO token cache writes may
-  fail (`Operation not permitted` under `~/.aws/cli/cache`). If this happens, rerun AWS commands
-  outside sandbox / with elevated permissions and document that adjustment.
+- **Cursor/Codex sandbox note:** In tool-sandboxed environments, AWS CLI cache writes may fail
+  (`Operation not permitted`). **SSO** sessions typically use `~/.aws/sso/cache`; other cached
+  credential material may use `~/.aws/cli/cache`. If either path cannot be written, rerun AWS
+  commands outside the sandbox / with elevated permissions and document that adjustment.
 
 ## Steps
 
@@ -76,8 +77,8 @@ If this fails with a credentials error:
 Print the account ID, assumed role, and default region so the user knows which account and region are
 being audited.
 
-If the audit runs in Cursor/Codex and STS fails with cache permission errors, rerun with elevated
-tool permissions before continuing.
+If the audit runs in Cursor/Codex and STS fails with cache permission errors (often under
+`~/.aws/sso/cache` or `~/.aws/cli/cache`), rerun with elevated tool permissions before continuing.
 
 ### 2. Cost Explorer — top-level billing
 
