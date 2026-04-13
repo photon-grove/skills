@@ -6,9 +6,9 @@ disable-model-invocation: true
 
 # AWS Cost Check
 
-Perform a thorough cost and health audit of an AWS account. Discovers all active services and
+Perform a thorough cost and health audit of an AWS account. Discovers active services and
 resources, checks for runaway costs or loops, flags resources approaching free tier limits, and
-provides a full cost breakdown.
+provides a cost breakdown with clear attribution gaps.
 
 This is a **generic, discovery-driven** audit — it does not assume any particular application
 architecture. It inspects whatever is running in the account.
@@ -37,12 +37,18 @@ Examples:
 - If possible, the profile should also be able to read Route 53 global resources, API Gateway
   custom domains, Budgets, and KMS key metadata. If any of these calls are denied, report the
   exact permission gap in the summary instead of silently skipping it.
-- **Repo-level configuration:** Repos can define an `## AWS Cost Check` section in their AGENTS.md or CLAUDE.md
-  to specify a default profile, authentication method (SSO vs static credentials), and alternative
-  profiles for resource enumeration. Always check AGENTS.md or CLAUDE.md before falling back to defaults.
-- **Region:** Resource enumeration (Lambda, DynamoDB, etc.) is per-region. This audit uses the
-  profile's configured default region. Cost Explorer is global and covers all regions. If the user
-  has resources in multiple regions, note this limitation in the summary.
+- **Repo-level configuration:** Repos can define an `## AWS Cost Check` section in AGENTS.md or
+  CLAUDE.md to specify:
+  - default payer profile
+  - auth command (for example SSO login)
+  - optional linked-account read-only profiles for deeper resource enumeration
+  Always check AGENTS.md or CLAUDE.md before falling back to defaults.
+- **Region + account scope:** Cost Explorer is global and may include multiple linked accounts and
+  regions. Resource enumeration is per-account/per-region. Always identify these scope boundaries in
+  the final attribution section.
+- **Cursor/Codex sandbox note:** In tool-sandboxed environments, AWS CLI SSO token cache writes may
+  fail (`Operation not permitted` under `~/.aws/cli/cache`). If this happens, rerun AWS commands
+  outside sandbox / with elevated permissions and document that adjustment.
 
 ## Steps
 
@@ -69,6 +75,9 @@ If this fails with a credentials error:
 
 Print the account ID, assumed role, and default region so the user knows which account and region are
 being audited.
+
+If the audit runs in Cursor/Codex and STS fails with cache permission errors, rerun with elevated
+tool permissions before continuing.
 
 ### 2. Cost Explorer — top-level billing
 
@@ -117,10 +126,33 @@ aws ce get-cost-and-usage --profile <profile> \
   --output json
 ```
 
+Also fetch **linked account** and **region** splits so you know where to enumerate resources next:
+
+```sh
+aws ce get-cost-and-usage --profile <profile> \
+  --time-period Start=<start>,End=<end> \
+  --granularity MONTHLY \
+  --metrics UnblendedCost \
+  --group-by Type=DIMENSION,Key=LINKED_ACCOUNT \
+  --output json
+
+aws ce get-cost-and-usage --profile <profile> \
+  --time-period Start=<start>,End=<end> \
+  --granularity MONTHLY \
+  --metrics UnblendedCost \
+  --group-by Type=DIMENSION,Key=REGION \
+  --output json
+```
+
+If a non-payer linked account drives spend, either:
+- switch to a configured linked-account read-only profile and enumerate there, or
+- explicitly call out attribution risk if that profile is unavailable.
+
 ### 3. Discover active resources
 
 Enumerate what's actually running in the account. For each service below, list resources and collect
-metrics. **Skip services that return empty results** — only report on what exists.
+metrics. Prioritize services with meaningful spend (for example, >$0.01 in window) before deep dives.
+**Skip services that return empty results** — only report on what exists.
 
 #### 3a. Lambda functions
 
@@ -248,7 +280,8 @@ aws cloudwatch get-metric-statistics --profile <profile> \
 ```
 
 Do not stop at `StandardStorage` if Cost Explorer shows S3 spend but the metric is zero. Check the
-bucket region and inspect other storage classes or Cost Explorer usage types.
+bucket region and inspect other storage classes or Cost Explorer usage types. Remember `BucketSizeBytes`
+often lags and can be empty for new/low-activity buckets; do not assume zero-cost from empty datapoints.
 
 **Free tier:** 5 GB storage, 20,000 GET, 2,000 PUT for 12 months.
 
@@ -399,7 +432,7 @@ Flag anything unusual:
 - **Alarms firing:** Any CloudWatch alarm in ALARM state
 - **Spend without matching inventory:** A billed service has meaningful cost but the current
   resource inventory is empty or near-empty; usually means deleted earlier-in-window resources,
-  global resources, cross-region resources, or missing permissions
+  linked-account resources, global resources, cross-region resources, or missing permissions
 
 ### 6. Print summary
 
@@ -415,7 +448,12 @@ Present the results in clear sections:
    - 🔴 Critical: runaway costs, ALARM state, throttling
    - 🟡 Warning: approaching free tier limits, error rates > 10%, DLQ buildup
    - 🟢 OK: everything within normal parameters
-8. **Estimated Cost Without Free Tier** — what the bill would be at full pricing, so the user
-   understands their actual resource consumption
+8. **Estimated Cost Without Free Tier** — what the bill would be at full pricing, or state that
+   billed cost is already near full pricing when free-tier impact is immaterial
 9. **Attribution Gaps** — any denied API calls, cross-region blind spots, or billed services whose
    current inventory did not explain the spend
+
+In **Attribution Gaps**, always include:
+- permission-denied APIs (verbatim action names)
+- linked-account blind spots (if cost is in an account you could not enumerate)
+- region blind spots (if non-default regions were billed but not enumerated)
