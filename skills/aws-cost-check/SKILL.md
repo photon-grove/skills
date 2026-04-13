@@ -50,6 +50,11 @@ Examples:
   (`Operation not permitted`). **SSO** sessions typically use `~/.aws/sso/cache`; other cached
   credential material may use `~/.aws/cli/cache`. If either path cannot be written, rerun AWS
   commands outside the sandbox / with elevated permissions and document that adjustment.
+- **IAM / permission sets:** In `bkonkle-dev/apps`, the payer `billing-admin` SSO inline policy
+  includes statement `AwsCostCheckResourceDiscoveryReadOnly` in `infra/management/sso_billing.tf`.
+  After Terraform changes to that permission set, the user must start a **new** SSO session
+  (`aws sso login --profile <profile>`) before retesting; Identity Center does not refresh
+  in-flight credentials.
 
 ## Steps
 
@@ -345,8 +350,10 @@ aws route53domains list-domains --profile <profile> --region us-east-1 --output 
 
 Each hosted zone costs $0.50/month. No free tier for hosted zones.
 
-Also check for health checks and registered domains when permissions allow. If these commands are
-denied, report the access gap explicitly because it weakens attribution for Route 53 charges.
+Also check for health checks and registered domains when permissions allow. `route53domains`
+requires **`route53domains:ListDomains`** (API is only offered from **`us-east-1`** in the CLI). If
+these commands are denied, report the access gap explicitly because it weakens attribution for
+Route 53 charges.
 
 #### 3k. CloudWatch Alarms
 
@@ -383,7 +390,7 @@ aws budgets describe-budgets --profile <profile> --account-id <account-id> --out
 
 List budget names, time units, and limits.
 
-#### 3n. EC2 / ECS / EKS / RDS
+#### 3n. EC2 / ECS / RDS
 
 Quick check for running compute that might be burning money:
 
@@ -399,8 +406,37 @@ aws rds describe-db-instances --profile <profile> \
   --output json 2>/dev/null
 ```
 
+When **EC2 - Other** (EBS) or **VPC** (public IPv4) spend shows up in Cost Explorer but running
+instance inventory is thin, also list **EBS volumes** and **Elastic IPs** (stopped instances and
+orphan volumes/EIPs are common drivers):
+
+```sh
+aws ec2 describe-volumes --profile <profile> \
+  --query 'Volumes[].{Id:VolumeId,State:State,Size:Size,Type:VolumeType,Attachments:Attachments}' \
+  --output json
+
+aws ec2 describe-addresses --profile <profile> --output json
+```
+
 Flag any **running EC2 instances**, active ECS clusters, or RDS instances — these are typically the
 most expensive resources.
+
+#### 3o. Secrets Manager (when billed)
+
+If **AWS Secrets Manager** appears in Cost Explorer for this account, list secret **metadata** (not
+values) to correlate monthly per-secret charges:
+
+```sh
+aws secretsmanager list-secrets --profile <profile> --output json
+```
+
+#### 3p. EFS (when billed)
+
+If **Amazon EFS** appears in Cost Explorer for this account:
+
+```sh
+aws efs describe-file-systems --profile <profile> --output json
+```
 
 ### 4. Free tier dashboard
 
