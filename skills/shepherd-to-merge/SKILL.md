@@ -20,7 +20,7 @@ context for reviewers to find it—e.g. commit subject or SHA—or why you did n
 diff is correct.
 
 **Multi-agent safety:** Multiple agents may be shepherding different PRs in parallel. Expect the
-base branch to move frequently as other agents merge. The rebase retry loop in step 10 handles this.
+base branch to move frequently as other agents merge. The rebase retry loop in step 11 handles this.
 Each agent works on its own PR branch and does not modify branches belonging to other sessions.
 
 ## Input
@@ -91,7 +91,7 @@ context for the operator.
 
 ### 3. Process queue one PR at a time
 
-For each PR in `processing_queue`, run steps 4-16 completely before moving to the next PR. Never shepherd
+For each PR in `processing_queue`, run steps 4-18 completely before moving to the next PR. Never shepherd
 multiple PRs concurrently from this skill.
 
 After each PR reaches `MERGED`, print a one-line progress update:
@@ -120,9 +120,10 @@ Wait for the subagent to return its findings before proceeding.
 
 ### 6. Address review feedback
 
-After the subagent returns, check for any existing review comments on the PR (including GitHub
-Copilot comments — Copilot provides a single automated review when the PR is created and does not
-re-review on subsequent pushes):
+After the subagent returns, check for any existing review comments on the PR, including GitHub
+Copilot comments. Copilot review can arrive after CI has already gone green, and sometimes after an
+agent would otherwise be ready to merge. Treat Copilot as an asynchronous reviewer whose comments
+must be fetched again immediately before merge.
 
 ```sh
 gh api repos/<owner>/<repo>/pulls/<number>/comments --jq '.[] | {id, node_id, path, line, body, user: .user.login}'
@@ -244,7 +245,93 @@ If CI workflows fail to **trigger** at all (no runs appear after pushing):
    `gh pr close <number> -R <owner>/<repo> && gh pr reopen <number> -R <owner>/<repo>`
 4. As a last resort, create a new PR from the same branch.
 
-### 10. Rebase on base branch (with retry loop)
+### 10. Wait for asynchronous reviews
+
+After CI is green, wait for asynchronous GitHub review automation to finish before checking merge
+state or enabling auto-merge. Do this even when branch protection does not require review approval:
+review comments may appear after the required `Summary` check succeeds.
+
+1. **Poll PR review/check state until Copilot is no longer pending.**
+
+   ```sh
+   deadline=$((SECONDS + 300))
+   while true; do
+     pr_state=$(gh pr view <number> -R <owner>/<repo> --json reviews,statusCheckRollup)
+
+     printf '%s\n' "$pr_state" | jq '{
+       reviews: [.reviews[] | {author: .author.login, state, submittedAt}],
+       checks: [.statusCheckRollup[] | {name: .name, status: .status, conclusion: .conclusion}]
+     }'
+
+     pending_copilot_checks=$(printf '%s\n' "$pr_state" | jq '[.statusCheckRollup[]
+       | select((.name | test("(?i)copilot")) and (.status != "COMPLETED"))] | length')
+
+     submitted_copilot_reviews=$(printf '%s\n' "$pr_state" | jq '[.reviews[]
+       | select((.author.login | test("copilot"; "i"))
+         and (.state != "PENDING")
+         and (.submittedAt != null))] | length')
+
+     if [ "$pending_copilot_checks" -eq 0 ] && [ "$submitted_copilot_reviews" -gt 0 ]; then
+       break
+     fi
+
+     if [ "$SECONDS" -ge "$deadline" ]; then
+       echo "Copilot review did not complete within 5 minutes; stop and ask the user whether to proceed."
+       exit 1
+     fi
+
+     sleep 10
+   done
+   ```
+
+   If the repo does not have Copilot PR review enabled and no Copilot check/review appears after
+   the timeout, stop and report that explicitly. Do not silently assume Copilot is absent unless the
+   user confirms or repo rules/docs say Copilot review is disabled.
+
+2. **Wait a final quiet period after CI is green.**
+
+   ```sh
+   sleep 30
+   ```
+
+   This catches delayed review comments that arrive just after `gh pr checks --watch` returns.
+
+3. **Re-fetch all review comments and review threads after the quiet period.**
+
+   ```sh
+   gh api repos/<owner>/<repo>/pulls/<number>/comments \
+     --jq '.[] | {id, node_id, path, line, body, user: .user.login, created_at}'
+   gh api graphql -f query='query {
+     repository(owner: "<owner>", name: "<repo>") {
+       pullRequest(number: <number>) {
+         reviewThreads(first: 100) {
+           nodes {
+             id
+             isResolved
+             comments(last: 100) {
+               totalCount
+               nodes { id author { login } body path line createdAt }
+             }
+           }
+         }
+       }
+     }
+   }' --jq '.data.repository.pullRequest.reviewThreads.nodes'
+   ```
+
+   If any thread reports `comments.totalCount > 100`, page that thread explicitly before making a
+   merge decision; the final re-fetch must include the latest comment in each thread.
+
+4. **If new comments or unresolved threads exist, return to step 6.** Reply publicly before
+   resolving, then rerun CI if code changed, then repeat this asynchronous-review wait.
+
+5. **Only proceed when all of these are true:**
+   - CI is green.
+   - Copilot review/checks are complete or explicitly confirmed unavailable.
+   - The final quiet-period re-fetch shows no unaddressed review comments.
+   - Unresolved review-thread count is 0.
+
+### 11. Rebase on base branch (with retry loop)
 
 Concurrent merges from other agents move the base branch forward frequently. This step may need to
 run multiple times — up to 5 attempts. With many parallel agents, the base branch can move several
@@ -257,7 +344,7 @@ times while CI is running.
    gh pr view <number> -R <owner>/<repo> --json mergeStateStatus --jq .mergeStateStatus
    ```
 
-2. If the status is `CLEAN`, exit the loop — proceed to step 11.
+2. If the status is `CLEAN`, exit the loop — proceed to step 12.
 
 3. Otherwise (`BEHIND`, `DIRTY`, or any other non-clean state):
    a. Fetch the latest base branch:
@@ -279,10 +366,11 @@ times while CI is running.
 4. If all 5 attempts fail to reach `CLEAN`, inform the user — multiple agents are likely merging
    concurrently and manual coordination may be needed.
 
-### 11. Enable auto-merge
+### 12. Enable auto-merge
 
-Once all feedback is addressed and CI is green (or running), enable auto-merge so GitHub merges the
-PR automatically when all branch protection requirements are met:
+Once all feedback is addressed, CI is green, asynchronous reviews have completed, and the final
+quiet-period re-fetch is clean, enable auto-merge so GitHub merges the PR automatically when all
+branch protection requirements are met:
 
 ```sh
 gh pr merge <number> -R <owner>/<repo> --auto --squash
@@ -297,16 +385,15 @@ required — the only merge gates are CI and resolved threads. If `mergeStateSta
 after CI passes, check for unresolved review threads (step 7) rather than assuming human approval
 is needed.
 
-**Copilot review note:** GitHub Copilot provides a single automated review when the PR is first
-created. It does **not** re-review after subsequent pushes. Do not request new Copilot reviews or
-wait for Copilot to review new commits — it won't happen. Copilot review is not a merge gate.
-If Copilot left review comments, treat them like any other review thread: address or respond with
-a **public inline reply**, then resolve the thread — never resolve Copilot (or any) threads without
-that reply. If `mergeStateStatus` remains `BLOCKED` after all threads
-are resolved and CI is green, the issue is likely unrelated to Copilot (check for ruleset
-requirements, workflow file scope restrictions, or other branch protection rules).
+**Copilot review note:** Do not merge immediately after CI turns green. Copilot can post comments
+after required checks complete. Always perform step 10's Copilot wait, quiet period, and final
+review-thread re-fetch before enabling merge. If Copilot left review comments, treat them like any
+other review thread: address or respond with a **public inline reply**, then resolve the thread —
+never resolve Copilot (or any) threads without that reply. If `mergeStateStatus` remains `BLOCKED`
+after all threads are resolved and CI is green, check for ruleset requirements, workflow file scope
+restrictions, or other branch protection rules.
 
-### 12. Confirm and summarize
+### 13. Confirm and summarize
 
 Print a summary:
 
@@ -314,6 +401,8 @@ Print a summary:
 - **Review:** findings from the subagent review
 - **Review threads:** confirm each thread got an inline reply (implementation or explained decline)
   before resolve
+- **Asynchronous reviews:** confirm Copilot review/checks completed or were explicitly unavailable,
+  and that the final quiet-period re-fetch found no unaddressed comments
 - **Fixes applied:** list of commits pushed to address feedback
 - **CI status:** all checks passing
 - **Merge:** auto-merge enabled, will merge when all requirements are met
@@ -321,7 +410,7 @@ Print a summary:
 If auto-merge could not be enabled (e.g., the repo doesn't support it), inform the user and suggest
 they merge manually once requirements are satisfied.
 
-### 13. Post-merge session memory rescue
+### 14. Post-merge session memory rescue
 
 After the PR merges (or when auto-merge is enabled), check whether any session memories are stranded
 on the current branch but missing from the merged PR. Session memories committed to worktree branches
@@ -384,7 +473,7 @@ If the state is `MERGED`:
 
    If the rescue PR creation fails, warn the user that session memories need manual rescue.
 
-### 14. Archive transcript
+### 15. Archive transcript
 
 After a successful merge, automatically archive the current session transcript so future agents can
 search and recall this session's context.
@@ -482,7 +571,7 @@ environment prefixes (for example profile selection or endpoint overrides) and a
    If the archive command fails (e.g., AWS credentials expired), warn the user but do not treat it
    as a blocking error. The PR is already merged; transcript archiving is best-effort.
 
-### 15. Post-merge cleanup (standalone only)
+### 16. Post-merge cleanup (standalone only)
 
 When `/shepherd-to-merge` is invoked standalone (not as part of `/pick-up-issue`), clean up the local
 branch after the PR merges. If the PR is still pending auto-merge, skip this step.
@@ -507,7 +596,7 @@ If the state is `MERGED`:
    git branch -D <pr-branch>
    ```
 
-### 16. Rebase remaining queue entries (sequential mode only)
+### 17. Rebase remaining queue entries (sequential mode only)
 
 When `mode=sequential` and at least one PR remains in `processing_queue`, update each remaining PR
 branch onto its own latest base branch before processing the next PR.
@@ -561,7 +650,7 @@ branch onto its own latest base branch before processing the next PR.
 
 Do not auto-resolve ambiguous conflicts.
 
-### 17. Final queue report (sequential mode only)
+### 18. Final queue report (sequential mode only)
 
 After the queue is exhausted (or processing stops early), print:
 
