@@ -9,7 +9,11 @@ import {
 } from '@xyflow/react'
 import {useEffect, useState, type ReactElement} from 'react'
 
-import '@xyflow/react/dist/style.css'
+// NOTE: React Flow's base stylesheet must be imported once, by the consuming
+// app, at its global entry — NOT here. A global CSS import inside a component
+// breaks Next.js builds (App Router only allows global CSS in app/layout.*;
+// Pages Router only in pages/_app.*). See the toolkit README "Styles" section:
+//   import '@xyflow/react/dist/style.css'
 
 import {runElkLayout, type LaidOutGraph} from './layout/elk'
 import {edgeTypes} from './nodes/edges'
@@ -81,4 +85,3 @@ export function DiagramCanvas({spec}: {spec: DiagramSpec}): ReactElement {
     </ReactFlowProvider>
   )
 }
-</content>

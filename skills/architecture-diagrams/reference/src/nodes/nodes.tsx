@@ -70,4 +70,3 @@ export const nodeTypes: NodeTypes = {
   client: LeafNode,
   boundary: BoundaryNode,
 }
-</content>

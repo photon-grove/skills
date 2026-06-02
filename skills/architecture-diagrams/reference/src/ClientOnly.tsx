@@ -19,4 +19,3 @@ export function ClientOnly({
 
   return mounted ? children : fallback
 }
-</content>

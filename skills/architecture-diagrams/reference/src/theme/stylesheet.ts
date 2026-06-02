@@ -180,4 +180,3 @@ export const RFD_STYLESHEET = `
   .rfd-viewer__nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--rfd-border); }
 }
 `
-</content>

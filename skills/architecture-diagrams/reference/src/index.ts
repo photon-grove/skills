@@ -33,4 +33,3 @@ export type {
   EdgeVariant,
   NodeKind,
 } from './types'
-</content>

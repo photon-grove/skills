@@ -36,7 +36,10 @@ export interface DiagramNode {
   icon?: string
   /** Parent boundary node id — nests this node inside a container. */
   parent?: string
-  /** Arbitrary key/value detail surfaced on hover / in a side panel. */
+  /**
+   * Arbitrary key/value detail. The first up-to-3 entries render as chips on the
+   * node card (the value is shown; the key appears in the chip's hover tooltip).
+   */
   meta?: Record<string, string>
 }
 
@@ -80,4 +83,3 @@ export interface DiagramNodeData extends Record<string, unknown> {
   node: DiagramNode
   direction: 'RIGHT' | 'DOWN'
 }
-</content>

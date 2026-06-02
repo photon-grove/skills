@@ -151,4 +151,3 @@ export const cqrsEventSourcing: DiagramSpec = {
     {id: 'views-query', source: 'views', target: 'queryapi', variant: 'data', label: 'read'},
   ],
 }
-</content>

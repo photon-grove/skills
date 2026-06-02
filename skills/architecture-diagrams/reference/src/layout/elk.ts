@@ -286,4 +286,3 @@ export async function runElkLayout(spec: DiagramSpec): Promise<LaidOutGraph> {
 
 // Re-exported for callers that want palette access alongside layout.
 export {domainColor}
-</content>

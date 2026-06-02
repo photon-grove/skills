@@ -74,8 +74,15 @@ project (e.g. `src/lib/diagrams/` or a local package), then write diagram data f
 1. **Install deps**: `npm i @xyflow/react elkjs`.
 2. **Copy the toolkit**: copy `reference/src/` from this skill into your project (keep the folder
    structure — `theme/`, `layout/`, `nodes/`, and the top-level files).
-3. **Write a diagram** as a typed `DiagramSpec` data file (see `reference/examples/`).
-4. **Register diagrams** in an array and mount the viewer on a **client-rendered** route:
+3. **Import React Flow's base stylesheet once, at your app's global entry** (not inside a
+   component — see Rendering below):
+
+   ```ts
+   import '@xyflow/react/dist/style.css'
+   ```
+
+4. **Write a diagram** as a typed `DiagramSpec` data file (see `reference/examples/`).
+5. **Register diagrams** in an array and mount the viewer on a **client-rendered** route:
 
    ```tsx
    import {DiagramViewer} from '@/lib/diagrams'
@@ -90,7 +97,7 @@ project (e.g. `src/lib/diagrams/` or a local package), then write diagram data f
    }
    ```
 
-5. **Give the viewer a real height.** It fills its parent (`height: 100%`), so the wrapper must have
+6. **Give the viewer a real height.** It fills its parent (`height: 100%`), so the wrapper must have
    a concrete height (`100dvh`, a flex child, etc.) or the canvas collapses to 0px.
 
 ## The data contract (`DiagramSpec`)
@@ -164,6 +171,20 @@ import dynamic from 'next/dynamic'
 const DocsScreen = dynamic(() => import('@/features/docs/DocsScreen'), {ssr: false})
 export default function Page() { return <DocsScreen /> }
 ```
+
+### Import React Flow's base stylesheet at the app entry
+
+React Flow ships a base stylesheet (`@xyflow/react/dist/style.css`) that the canvas needs. Import it
+**once, from your app's global entry** — the toolkit deliberately does *not* import it inside a
+component, because a global CSS import inside a component breaks Next.js builds:
+
+- **Next.js App Router**: `import '@xyflow/react/dist/style.css'` in `app/layout.tsx`.
+- **Next.js Pages Router**: import it in `pages/_app.tsx`.
+- **TanStack Start / Vite / Remix**: import it in the root route/layout or your app entry (e.g.
+  `main.tsx`) — anywhere global is fine since they don't enforce App Router's restriction.
+
+The toolkit's own visual stylesheet (`RFD_STYLESHEET`) is separate and *is* injected automatically
+by `DiagramViewer`; only React Flow's base CSS is your responsibility.
 
 ### Remount on switch (subtle but important)
 
@@ -298,16 +319,16 @@ features/docs/
 When standing this up in a project:
 
 1. `npm i @xyflow/react elkjs` (confirm React 18/19 present).
-2. Copy `reference/src/` into the project. The React Flow stylesheet import
-   (`@xyflow/react/dist/style.css`) is already handled inside `DiagramCanvas.tsx`, so there's
-   nothing extra to wire up.
-3. Decide theming: define `--app-*` tokens on a wrapper, or rename to your tokens in
+2. Copy `reference/src/` into the project.
+3. Import `@xyflow/react/dist/style.css` once at your app's global entry (root layout / `_app` /
+   app entry — see Rendering). Don't import it inside a component.
+4. Decide theming: define `--app-*` tokens on a wrapper, or rename to your tokens in
    `stylesheet.ts`. Confirm light/dark both read well.
-4. Write 1 diagram, mount `<DiagramViewer>` on a **client** route with a real height.
-5. Verify: canvas renders, you can pan/zoom, edges route around nodes, labels sit in gaps, the
+5. Write 1 diagram, mount `<DiagramViewer>` on a **client** route with a real height.
+6. Verify: canvas renders, you can pan/zoom, edges route around nodes, labels sit in gaps, the
    minimap colors match domains, switching diagrams redraws cleanly.
-6. Add the rest of the diagrams as data files; register in the index array.
-7. Update the app's docs/README index to point at the new `/docs` route.
+7. Add the rest of the diagrams as data files; register in the index array.
+8. Update the app's docs/README index to point at the new docs route.
 
 ## Pitfalls
 
@@ -343,5 +364,3 @@ When standing this up in a project:
 > If your project already publishes this toolkit as an internal package, import from that package
 > instead of copying. The `reference/` copy exists so the skill is self-contained and works in any
 > repo with no prior setup.
-</content>
-</invoke>

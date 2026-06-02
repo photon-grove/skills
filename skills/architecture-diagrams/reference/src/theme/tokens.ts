@@ -34,7 +34,11 @@ export function domainColor(domain?: string): DomainColor {
   return hit ?? NEUTRAL
 }
 
-/** Fixed render box per kind. Boundary containers are sized by ELK from children. */
+/**
+ * Fixed render box per kind. Boundary containers are normally sized by ELK from
+ * their children; `nodeSize('boundary')` returns a fixed box only as a fallback
+ * (e.g. an empty boundary, or before layout runs).
+ */
 export const NODE_SIZE: Record<Exclude<NodeKind, 'boundary'>, {width: number; height: number}> = {
   service: {width: 248, height: 96},
   datastore: {width: 224, height: 96},
@@ -88,4 +92,3 @@ export const KIND_LABEL: Record<NodeKind, string> = {
   client: 'Client surface',
   boundary: 'Boundary',
 }
-</content>

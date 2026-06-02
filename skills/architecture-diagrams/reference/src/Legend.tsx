@@ -97,4 +97,3 @@ function LegendGroup({title, children}: {title: string; children: ReactElement[]
     </div>
   )
 }
-</content>

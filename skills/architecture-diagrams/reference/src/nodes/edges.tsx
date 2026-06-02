@@ -101,4 +101,3 @@ export const edgeTypes: EdgeTypes = {
 }
 
 export type OrthogonalEdgeType = Edge<OrthogonalEdgeData, 'orthogonal'>
-</content>
