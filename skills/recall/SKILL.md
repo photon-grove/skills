@@ -1,7 +1,7 @@
 ---
 name: recall
 description: Load relevant prior context from layered session memory and archived transcripts
-argument-hint: [owner/repo] [keywords]
+argument-hint: "[owner/repo] [keywords]"
 disable-model-invocation: true
 ---
 
