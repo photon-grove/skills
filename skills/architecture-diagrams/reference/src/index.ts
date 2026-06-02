@@ -7,6 +7,8 @@ export {runElkLayout} from './layout/elk'
 export type {LaidOutGraph} from './layout/elk'
 
 export {nodeTypes} from './nodes/nodes'
+export {edgeTypes, OrthogonalEdge, buildRoutePath} from './nodes/edges'
+export type {OrthogonalEdgeData, OrthogonalEdgeType, RoutePoint} from './nodes/edges'
 export {DiagramIcon} from './theme/icons'
 export {RFD_STYLESHEET} from './theme/stylesheet'
 

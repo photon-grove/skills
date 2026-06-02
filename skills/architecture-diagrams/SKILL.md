@@ -65,7 +65,7 @@ React Flow  ──►  custom node components (themed) + custom orthogonal edge
 DiagramViewer  ──►  sidebar picker + header + canvas + legend
 ```
 
-The bundled toolkit (`reference/src/`) is ~11 small files. Copy the whole `src/` tree into your
+The bundled toolkit (`reference/src/`) is about a dozen small files. Copy the whole `src/` tree into your
 project (e.g. `src/lib/diagrams/` or a local package), then write diagram data files and mount
 `<DiagramViewer diagrams={...} />` on a route.
 
@@ -231,9 +231,9 @@ The stylesheet reads host theme tokens with standalone fallbacks:
 ```
 
 **Portability:** the `--app-*` names are placeholder host tokens you map to whatever design system
-the app already uses. Either (a) define `--app-ink`, `--app-surface`, `--app-border`, `--app-subtle`,
-`--app-hover`, `--app-font-sans` (and optionally `--app-accent`) on a wrapping element, or (b) rename
-the `var(--app-*, …)` references in `stylesheet.ts` to your own token names. The hard-coded fallbacks
+the app already uses. Either (a) define `--app-ink`, `--app-muted`, `--app-surface`, `--app-border`,
+`--app-subtle`, `--app-hover`, `--app-font-sans` (and optionally `--app-accent`) on a wrapping
+element, or (b) rename the `var(--app-*, …)` references in `stylesheet.ts` to your own token names. The hard-coded fallbacks
 mean it looks correct out of the box even with no tokens defined. Dark mode "just works" if your
 tokens flip — the layout uses `color-mix(...)` against `--rfd-ink`/`--rfd-card` rather than fixed
 light colors.
@@ -298,8 +298,9 @@ features/docs/
 When standing this up in a project:
 
 1. `npm i @xyflow/react elkjs` (confirm React 18/19 present).
-2. Copy `reference/src/` into the project; fix the import of React Flow's stylesheet
-   (`@xyflow/react/dist/style.css`) is already done inside `DiagramCanvas.tsx`.
+2. Copy `reference/src/` into the project. The React Flow stylesheet import
+   (`@xyflow/react/dist/style.css`) is already handled inside `DiagramCanvas.tsx`, so there's
+   nothing extra to wire up.
 3. Decide theming: define `--app-*` tokens on a wrapper, or rename to your tokens in
    `stylesheet.ts`. Confirm light/dark both read well.
 4. Write 1 diagram, mount `<DiagramViewer>` on a **client** route with a real height.

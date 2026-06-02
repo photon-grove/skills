@@ -54,8 +54,8 @@ client'` / `dynamic({ssr:false})` notes) and give the wrapper a real height.
 ## Theming
 
 The stylesheet reads `--app-*` host tokens with light-mode fallbacks. To theme: define `--app-ink`,
-`--app-surface`, `--app-border`, `--app-subtle`, `--app-hover`, `--app-font-sans` (and optionally
-`--app-accent`) on a wrapping element, or rename the `var(--app-*, …)` references in
+`--app-muted`, `--app-surface`, `--app-border`, `--app-subtle`, `--app-hover`, `--app-font-sans`
+(and optionally `--app-accent`) on a wrapping element, or rename the `var(--app-*, …)` references in
 `theme/stylesheet.ts` to whatever design tokens you already use. Dark mode works automatically if
 those tokens flip.
 </content>
