@@ -1,7 +1,7 @@
 ---
 name: architecture-diagrams
 description: Build an interactive, layered architecture-diagram docs page (React Flow + ELK auto-layout), portable to TanStack Start, Next.js, or any React app
-argument-hint: [target app path]
+argument-hint: "[target app path]"
 ---
 
 # Architecture Diagrams
