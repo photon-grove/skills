@@ -1,7 +1,7 @@
 # reference/ — copy-paste toolkit
 
-A verbatim, framework-agnostic copy of the React Flow + ELK diagram toolkit behind the Homunculus
-`/docs` page. Drop `src/` into any React 18/19 app and you have the whole system.
+A self-contained, framework-agnostic React Flow + ELK diagram toolkit. Drop `src/` into any React
+18/19 app and you have the whole system.
 
 ## Install
 
@@ -53,11 +53,9 @@ client'` / `dynamic({ssr:false})` notes) and give the wrapper a real height.
 
 ## Theming
 
-The stylesheet reads `--pg-*` design tokens with light-mode fallbacks. To theme: define `--pg-ink`,
-`--pg-shell`, `--pg-border`, `--pg-subtle`, `--pg-hover`, `--pg-font-sans` on a wrapping element, or
-rename the `var(--pg-*, …)` references in `theme/stylesheet.ts` to your own tokens. Dark mode works
-automatically if those tokens flip.
-
-> If you're inside the `photon-grove/apps` monorepo, skip the copy and import
-> `@photon-grove/react-flow-diagrams` directly — this folder is the source of truth's portable twin.
+The stylesheet reads `--app-*` host tokens with light-mode fallbacks. To theme: define `--app-ink`,
+`--app-surface`, `--app-border`, `--app-subtle`, `--app-hover`, `--app-font-sans` (and optionally
+`--app-accent`) on a wrapping element, or rename the `var(--app-*, …)` references in
+`theme/stylesheet.ts` to whatever design tokens you already use. Dark mode works automatically if
+those tokens flip.
 </content>

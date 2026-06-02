@@ -81,8 +81,8 @@ export const EDGE_VARIANT_LABEL: Record<EdgeVariant, string> = {
 export const KIND_LABEL: Record<NodeKind, string> = {
   service: 'Service / worker',
   datastore: 'Data store',
-  queue: 'Queue (SQS)',
-  topic: 'Topic / bus (SNS)',
+  queue: 'Queue',
+  topic: 'Topic / event bus',
   external: 'External system',
   process: 'Pipeline step',
   client: 'Client surface',

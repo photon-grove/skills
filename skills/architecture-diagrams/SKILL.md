@@ -1,16 +1,16 @@
 ---
 name: architecture-diagrams
-description: Build an interactive, layered architecture-diagram docs page (React Flow + ELK auto-layout) — the Homunculus /docs experience, portable to TanStack Start, Next.js, or any React app
+description: Build an interactive, layered architecture-diagram docs page (React Flow + ELK auto-layout), portable to TanStack Start, Next.js, or any React app
 argument-hint: [target app path]
 ---
 
 # Architecture Diagrams
 
 Build a polished, interactive **architecture diagram docs page** — a sidebar of diagrams, an
-auto-laid-out canvas with zoom/pan/minimap, themed nodes, routed edges, and a legend. This is the
-system behind Homunculus `/docs`. It is intentionally framework-agnostic: the rendering toolkit is
-plain React + two libraries, so the same code drops into **TanStack Start**, **Next.js (App or
-Pages Router)**, Vite SPA, Remix, or any React 18/19 app.
+auto-laid-out canvas with zoom/pan/minimap, themed nodes, routed edges, and a legend. It is
+intentionally framework-agnostic: the rendering toolkit is plain React + two libraries, so the same
+code drops into **TanStack Start**, **Next.js (App or Pages Router)**, Vite SPA, Remix, or any
+React 18/19 app.
 
 The core idea: **callers only write semantic data** (a list of nodes and edges). The toolkit owns
 layout, positioning, styling, and theming. Authoring a new diagram is editing one data file — never
@@ -224,19 +224,19 @@ themes cleanly and supports dark mode without a single dark-mode branch.
 The stylesheet reads host theme tokens with standalone fallbacks:
 
 ```css
---rfd-ink:    var(--pg-ink, #0f172a);     /* text */
---rfd-card:   var(--pg-shell, #ffffff);   /* node background */
---rfd-border: var(--pg-border, rgba(100,116,139,0.22));
---rfd-edge:   var(--pg-subtle, #64748b);  /* default edge */
+--rfd-ink:    var(--app-ink, #0f172a);     /* text */
+--rfd-card:   var(--app-surface, #ffffff); /* node background */
+--rfd-border: var(--app-border, rgba(100,116,139,0.22));
+--rfd-edge:   var(--app-subtle, #64748b);  /* default edge */
 ```
 
-**Portability:** the `--pg-*` names are Photon Grove's design tokens (set by
-`@photon-grove/react-ui`'s ThemeProvider). In another app, either (a) define `--pg-ink`,
-`--pg-shell`, `--pg-border`, `--pg-subtle`, `--pg-hover`, `--pg-font-sans` on a wrapping element, or
-(b) rename the `var(--pg-*, …)` references in `stylesheet.ts` to your own token names. The hard-coded
-fallbacks mean it looks correct out of the box even with no tokens defined. Dark mode "just works"
-if your tokens flip — the layout uses `color-mix(...)` against `--rfd-ink`/`--rfd-card` rather than
-fixed light colors.
+**Portability:** the `--app-*` names are placeholder host tokens you map to whatever design system
+the app already uses. Either (a) define `--app-ink`, `--app-surface`, `--app-border`, `--app-subtle`,
+`--app-hover`, `--app-font-sans` (and optionally `--app-accent`) on a wrapping element, or (b) rename
+the `var(--app-*, …)` references in `stylesheet.ts` to your own token names. The hard-coded fallbacks
+mean it looks correct out of the box even with no tokens defined. Dark mode "just works" if your
+tokens flip — the layout uses `color-mix(...)` against `--rfd-ink`/`--rfd-card` rather than fixed
+light colors.
 
 ### Node anatomy
 
@@ -300,7 +300,7 @@ When standing this up in a project:
 1. `npm i @xyflow/react elkjs` (confirm React 18/19 present).
 2. Copy `reference/src/` into the project; fix the import of React Flow's stylesheet
    (`@xyflow/react/dist/style.css`) is already done inside `DiagramCanvas.tsx`.
-3. Decide theming: define `--pg-*` tokens on a wrapper, or rename to your tokens in
+3. Decide theming: define `--app-*` tokens on a wrapper, or rename to your tokens in
    `stylesheet.ts`. Confirm light/dark both read well.
 4. Write 1 diagram, mount `<DiagramViewer>` on a **client** route with a real height.
 5. Verify: canvas renders, you can pan/zoom, edges route around nodes, labels sit in gaps, the
@@ -318,7 +318,7 @@ When standing this up in a project:
 | Edges cut through nodes | Not consuming ELK routes | Use the custom `OrthogonalEdge` + route data from `runElkLayout` |
 | Boundary-internal edge floats away from its nodes | Boundary-local coords not translated | Offset edge waypoints by the lowest-common-ancestor boundary origin (bundled layout does this) |
 | Stale/unanchored edges after switching diagrams | Canvas reused, not remounted | Key the canvas by `spec.id` |
-| Colors look wrong in dark mode | Host tokens missing/not flipping | Define `--pg-*` (or your) tokens that flip with theme; fallbacks are light-only |
+| Colors look wrong in dark mode | Host tokens missing/not flipping | Define `--app-*` (or your) tokens that flip with theme; fallbacks are light-only |
 | Diagram sprawls into a thin band | Too many sibling nodes in one layer | Group with boundaries; tune `elk.aspectRatio` / split the diagram |
 
 ## Reference files
@@ -339,8 +339,8 @@ When standing this up in a project:
 - `Legend.tsx` — auto-derived legend
 - `examples/cqrs-event-sourcing.ts` — a complete example spec to copy from
 
-> Source of truth in the Photon Grove monorepo: `packages/react-flow-diagrams`. If you're working
-> *inside* `photon-grove/apps`, import `@photon-grove/react-flow-diagrams` directly instead of
-> copying. The `reference/` copy exists so this skill works in any other repo.
+> If your project already publishes this toolkit as an internal package, import from that package
+> instead of copying. The `reference/` copy exists so the skill is self-contained and works in any
+> repo with no prior setup.
 </content>
 </invoke>

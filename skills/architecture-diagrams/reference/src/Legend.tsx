@@ -11,7 +11,7 @@ const DOMAIN_TITLES: Record<string, string> = {
   auth: 'Auth / IdP',
   ingestion: 'Ingestion',
   planner: 'Planner',
-  ai: 'AI / Bedrock',
+  ai: 'AI / model',
   data: 'Data store',
   queue: 'Queue',
   event: 'Events',

@@ -10,8 +10,8 @@
 export type NodeKind =
   | 'service' // a running service / lambda / worker
   | 'datastore' // a database / table / bucket
-  | 'queue' // an async work queue (SQS)
-  | 'topic' // a pub/sub topic (SNS) / event bus
+  | 'queue' // an async work queue
+  | 'topic' // a pub/sub topic / event bus
   | 'external' // a third-party system outside our boundary
   | 'process' // a pipeline step / stage / function
   | 'client' // a browser / device / user-facing surface

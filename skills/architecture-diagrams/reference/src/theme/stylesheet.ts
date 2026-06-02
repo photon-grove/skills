@@ -1,26 +1,27 @@
 /**
  * One self-contained stylesheet for the whole toolkit. Injected once by the
- * canvas so the package needs no Tailwind or external CSS in the consuming app.
- * Theme-derived colors read the host's `--pg-*` CSS vars (set by
- * @photon-grove/react-ui's ThemeProvider) with safe standalone fallbacks.
+ * viewer so the package needs no Tailwind or external CSS in the consuming app.
+ * Theme-derived colors read host `--app-*` CSS vars (set by your app's theme
+ * provider, if any) with safe standalone fallbacks.
  *
- * PORTABILITY: to theme this in another app, either define `--pg-ink`,
- * `--pg-shell`, `--pg-border`, `--pg-subtle`, `--pg-hover`, `--pg-font-sans`
- * (and optionally `--pg-palette-accent` / `--hm-accent`) on a wrapping element,
- * or rename the `var(--pg-*, …)` references below to your own design tokens.
- * The hard-coded fallbacks make it render correctly with no tokens at all.
+ * PORTABILITY: to theme this in your app, either define `--app-ink`,
+ * `--app-surface`, `--app-border`, `--app-subtle`, `--app-hover`,
+ * `--app-font-sans` (and optionally `--app-accent`) on a wrapping element, or
+ * rename the `var(--app-*, …)` references below to whatever design tokens you
+ * already use. The hard-coded fallbacks make it render correctly with no tokens
+ * at all, and dark mode works automatically if your tokens flip.
  */
 export const RFD_STYLESHEET = `
 .rfd-root {
-  --rfd-ink: var(--pg-ink, #0f172a);
-  --rfd-muted: var(--pg-muted, rgba(15,23,42,0.62));
-  --rfd-card: var(--pg-shell, #ffffff);
-  --rfd-border: var(--pg-border, rgba(100,116,139,0.22));
-  --rfd-canvas: color-mix(in srgb, var(--pg-ink, #0f172a) 5%, var(--pg-shell, #ffffff));
-  --rfd-edge: var(--pg-subtle, #64748b);
-  --rfd-edge-strong: var(--hm-accent, var(--pg-palette-accent, #818cf8));
-  --rfd-edge-muted: color-mix(in srgb, var(--pg-ink, #64748b) 38%, transparent);
-  --rfd-handle-ring: var(--pg-shell, #ffffff);
+  --rfd-ink: var(--app-ink, #0f172a);
+  --rfd-muted: var(--app-muted, rgba(15,23,42,0.62));
+  --rfd-card: var(--app-surface, #ffffff);
+  --rfd-border: var(--app-border, rgba(100,116,139,0.22));
+  --rfd-canvas: color-mix(in srgb, var(--app-ink, #0f172a) 5%, var(--app-surface, #ffffff));
+  --rfd-edge: var(--app-subtle, #64748b);
+  --rfd-edge-strong: var(--app-accent, #818cf8);
+  --rfd-edge-muted: color-mix(in srgb, var(--app-ink, #64748b) 38%, transparent);
+  --rfd-handle-ring: var(--app-surface, #ffffff);
   width: 100%;
   height: 100%;
 }
@@ -108,13 +109,13 @@ export const RFD_STYLESHEET = `
   height: 100%;
   min-height: 0;
   color: var(--rfd-ink);
-  font-family: var(--pg-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  font-family: var(--app-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
 }
 .rfd-viewer__nav {
   display: flex; flex-direction: column; gap: 6px;
   padding: 16px 12px; overflow-y: auto;
   border-right: 1px solid var(--rfd-border);
-  background: color-mix(in srgb, var(--pg-ink, #0f172a) 3%, var(--pg-shell, #fff));
+  background: color-mix(in srgb, var(--app-ink, #0f172a) 3%, var(--app-surface, #fff));
 }
 .rfd-viewer__brand { display: flex; flex-direction: column; gap: 2px; padding: 4px 8px 12px; }
 .rfd-viewer__brand-title { font-size: 15px; font-weight: 750; letter-spacing: -0.01em; }
@@ -130,7 +131,7 @@ export const RFD_STYLESHEET = `
   background: transparent; cursor: pointer; color: inherit; width: 100%;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-.rfd-viewer__item:hover { background: var(--pg-hover, rgba(100,116,139,0.1)); }
+.rfd-viewer__item:hover { background: var(--app-hover, rgba(100,116,139,0.1)); }
 .rfd-viewer__item--active {
   background: var(--rfd-card);
   border-color: var(--rfd-border);
@@ -148,7 +149,7 @@ export const RFD_STYLESHEET = `
 .rfd-viewer__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .rfd-viewer__header {
   padding: 20px 24px 15px; border-bottom: 1px solid var(--rfd-border);
-  background: color-mix(in srgb, var(--pg-ink, #0f172a) 2%, var(--pg-shell, #fff));
+  background: color-mix(in srgb, var(--app-ink, #0f172a) 2%, var(--app-surface, #fff));
 }
 .rfd-viewer__title { margin: 0; font-size: 22px; font-weight: 760; letter-spacing: -0.02em; }
 .rfd-viewer__desc { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--rfd-muted); max-width: 76ch; }
@@ -162,7 +163,7 @@ export const RFD_STYLESHEET = `
 .rfd-legend {
   display: flex; flex-wrap: wrap; gap: 8px 26px;
   padding: 12px 22px; border-top: 1px solid var(--rfd-border);
-  background: color-mix(in srgb, var(--pg-ink, #0f172a) 3%, var(--pg-shell, #fff));
+  background: color-mix(in srgb, var(--app-ink, #0f172a) 3%, var(--app-surface, #fff));
 }
 .rfd-legend__group { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .rfd-legend__title {
