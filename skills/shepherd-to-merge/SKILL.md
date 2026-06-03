@@ -13,7 +13,8 @@ protection rules or security constraints.
 **Important:** Never use admin privileges to bypass branch protections, force-merge, or dismiss
 reviews. The goal is to satisfy all merge requirements legitimately.
 
-**Review threads:** Every actionable line-level review comment (humans, Copilot, other bots) must
+**Review threads:** Every actionable line-level review comment (humans, the automatic PR review
+agent, other bots) must
 receive a **public inline reply** on GitHub explaining the outcome (what changed, with enough
 context for reviewers to find it—e.g. commit subject or SHA—or why you did not change code)
 **before** you resolve the thread. Silent resolves are treated as a process failure even when the
@@ -120,10 +121,11 @@ Wait for the subagent to return its findings before proceeding.
 
 ### 6. Address review feedback
 
-After the subagent returns, check for any existing review comments on the PR, including GitHub
-Copilot comments. Copilot review can arrive after CI has already gone green, and sometimes after an
-agent would otherwise be ready to merge. Treat Copilot as an asynchronous reviewer whose comments
-must be fetched again immediately before merge.
+After the subagent returns, check for any existing review comments on the PR, including those from
+the repo's automatic PR review agent (e.g. OpenAI Codex, GitHub Copilot, Claude Code Review). That
+review can arrive after CI has already gone green, and sometimes after an agent would otherwise be
+ready to merge. Treat the review agent as an asynchronous reviewer whose comments must be fetched
+again immediately before merge.
 
 ```sh
 gh api repos/<owner>/<repo>/pulls/<number>/comments --jq '.[] | {id, node_id, path, line, body, user: .user.login}'
@@ -134,12 +136,14 @@ gh api repos/<owner>/<repo>/pulls/<number>/reviews --jq '.[] | {id, node_id, sta
 without a **public inline reply on GitHub** on that comment or thread. Resolving threads with no
 reply looks like ignored feedback even when the code was fixed; many repos (including companion
 `AGENTS.md` guidance) expect a short explanation on the thread when it is resolved. This applies to
-**every actionable PR review comment**, including Copilot and other bots: after you fix code **or**
+**every actionable PR review comment**, including the automatic review agent and other bots: after
+you fix code **or**
 after you decide not to change behavior, post the reply **first**, then resolve (on repos that use
 resolved threads as a merge gate). Declining a suggestion is fine when explained — the reply is
 still required.
 
-For each piece of actionable feedback (from the subagent review, human reviewers, or Copilot):
+For each piece of actionable feedback (from the subagent review, human reviewers, or the automatic
+review agent):
 
 1. **Fix the issue** in the local checkout — edit the file, make the correction (or decide not to
    change behavior and prepare the explanation for item 4 below).
@@ -251,9 +255,13 @@ After CI is green, wait for asynchronous GitHub review automation to finish befo
 state or enabling auto-merge. Do this even when branch protection does not require review approval:
 review comments may appear after the required `Summary` check succeeds.
 
-1. **Poll PR review/check state until Copilot is no longer pending.**
+1. **Poll PR review/check state until the automatic review agent is no longer pending.**
+
+   The `AGENT` pattern below matches the common review agents (OpenAI Codex, GitHub Copilot, Claude
+   Code Review) by check name or review-author login. Extend it if a repo uses a different reviewer.
 
    ```sh
+   AGENT='codex|copilot|claude'
    deadline=$((SECONDS + 300))
    while true; do
      pr_state=$(gh pr view <number> -R <owner>/<repo> --json reviews,statusCheckRollup)
@@ -263,20 +271,20 @@ review comments may appear after the required `Summary` check succeeds.
        checks: [.statusCheckRollup[] | {name: .name, status: .status, conclusion: .conclusion}]
      }'
 
-     pending_copilot_checks=$(printf '%s\n' "$pr_state" | jq '[.statusCheckRollup[]
-       | select((.name | test("(?i)copilot")) and (.status != "COMPLETED"))] | length')
+     pending_agent_checks=$(printf '%s\n' "$pr_state" | jq --arg agent "$AGENT" '[.statusCheckRollup[]
+       | select((.name | test($agent; "i")) and (.status != "COMPLETED"))] | length')
 
-     submitted_copilot_reviews=$(printf '%s\n' "$pr_state" | jq '[.reviews[]
-       | select((.author.login | test("copilot"; "i"))
+     submitted_agent_reviews=$(printf '%s\n' "$pr_state" | jq --arg agent "$AGENT" '[.reviews[]
+       | select((.author.login | test($agent; "i"))
          and (.state != "PENDING")
          and (.submittedAt != null))] | length')
 
-     if [ "$pending_copilot_checks" -eq 0 ] && [ "$submitted_copilot_reviews" -gt 0 ]; then
+     if [ "$pending_agent_checks" -eq 0 ] && [ "$submitted_agent_reviews" -gt 0 ]; then
        break
      fi
 
      if [ "$SECONDS" -ge "$deadline" ]; then
-       echo "Copilot review did not complete within 5 minutes; stop and ask the user whether to proceed."
+       echo "Automatic review did not complete within 5 minutes; stop and ask the user whether to proceed."
        exit 1
      fi
 
@@ -284,9 +292,9 @@ review comments may appear after the required `Summary` check succeeds.
    done
    ```
 
-   If the repo does not have Copilot PR review enabled and no Copilot check/review appears after
-   the timeout, stop and report that explicitly. Do not silently assume Copilot is absent unless the
-   user confirms or repo rules/docs say Copilot review is disabled.
+   If the repo does not have an automatic PR review agent enabled and no agent check/review appears
+   after the timeout, stop and report that explicitly. Do not silently assume the agent is absent
+   unless the user confirms or repo rules/docs say automatic review is disabled.
 
 2. **Wait a final quiet period after CI is green.**
 
@@ -327,7 +335,7 @@ review comments may appear after the required `Summary` check succeeds.
 
 5. **Only proceed when all of these are true:**
    - CI is green.
-   - Copilot review/checks are complete or explicitly confirmed unavailable.
+   - Automatic review agent review/checks are complete or explicitly confirmed unavailable.
    - The final quiet-period re-fetch shows no unaddressed review comments.
    - Unresolved review-thread count is 0.
 
@@ -385,11 +393,12 @@ required — the only merge gates are CI and resolved threads. If `mergeStateSta
 after CI passes, check for unresolved review threads (step 7) rather than assuming human approval
 is needed.
 
-**Copilot review note:** Do not merge immediately after CI turns green. Copilot can post comments
-after required checks complete. Always perform step 10's Copilot wait, quiet period, and final
-review-thread re-fetch before enabling merge. If Copilot left review comments, treat them like any
-other review thread: address or respond with a **public inline reply**, then resolve the thread —
-never resolve Copilot (or any) threads without that reply. If `mergeStateStatus` remains `BLOCKED`
+**Automatic review note:** Do not merge immediately after CI turns green. The automatic PR review
+agent can post comments after required checks complete. Always perform step 10's review-agent wait,
+quiet period, and final review-thread re-fetch before enabling merge. If the agent left review
+comments, treat them like any other review thread: address or respond with a **public inline reply**,
+then resolve the thread — never resolve the agent's (or any) threads without that reply. If
+`mergeStateStatus` remains `BLOCKED`
 after all threads are resolved and CI is green, check for ruleset requirements, workflow file scope
 restrictions, or other branch protection rules.
 
@@ -401,8 +410,8 @@ Print a summary:
 - **Review:** findings from the subagent review
 - **Review threads:** confirm each thread got an inline reply (implementation or explained decline)
   before resolve
-- **Asynchronous reviews:** confirm Copilot review/checks completed or were explicitly unavailable,
-  and that the final quiet-period re-fetch found no unaddressed comments
+- **Asynchronous reviews:** confirm the automatic review agent's review/checks completed or were
+  explicitly unavailable, and that the final quiet-period re-fetch found no unaddressed comments
 - **Fixes applied:** list of commits pushed to address feedback
 - **CI status:** all checks passing
 - **Merge:** auto-merge enabled, will merge when all requirements are met
