@@ -11,17 +11,17 @@ Manage session memory artifacts in repos that have opted in via a `docs/agent-se
 Two modes: `start` creates the session directory with a template `memory.md`; `finalize` checks for
 completeness and stages everything.
 
-Use a layered memory model (influenced by OpenClaw):
+Use a two-tier memory model:
 
 - **Session artifact (source of truth for one run):**
   `docs/agent-sessions/YYYY-MM-DD-{session-name}-{scope}/memory.md`
-- **Working memory log (append-only timeline):**
-  `docs/agent-sessions/memory/YYYY-MM-DD.md`
 - **Durable memory (curated cross-session memory):**
   `docs/agent-sessions/MEMORY.md`
 
-Session directories still prevent collisions across parallel worktrees, while the log and durable
-files make recall easier across many sessions.
+Session directories prevent collisions across parallel worktrees, while durable memory makes recall
+easier across many sessions. (A third shared daily-log tier was dropped: concurrent worktrees
+conflict on a single append-only file, and the chronology is already recoverable from the dated
+session artifacts.)
 
 ## Memory Rules
 
@@ -29,11 +29,9 @@ files make recall easier across many sessions.
 2. If the user says "remember", "note this", "save this", or equivalent, write it to the current
    session `memory.md` and clearly mark it if it is durable (decision, preference, stable fact,
    recurring pitfall) so it can be promoted later.
-3. Use `docs/agent-sessions/memory/YYYY-MM-DD.md` for operational breadcrumbs and chronology during
-   the run; do not curate heavily there.
-4. Update `docs/agent-sessions/MEMORY.md` during `finalize` by promoting durable items from the
+3. Update `docs/agent-sessions/MEMORY.md` during `finalize` by promoting durable items from the
    session artifact. Keep entries short, deduplicated, and date-stamped.
-5. Keep `MEMORY.md` lean. It is the file recall reads first, so its size is a context cost paid by
+4. Keep `MEMORY.md` lean. It is the file recall reads first, so its size is a context cost paid by
    every future session. Session artifacts are the immutable record; `MEMORY.md` is the
    deduplicated projection of *current* truth — not an append-only pile. When promoting, **dedup and
    supersede in place**: edit the existing entry for a decision/fact/pitfall (and bump its date)
@@ -149,14 +147,8 @@ Parse `$ARGUMENTS` — if it equals `start` (or is empty), run this mode.
    <!-- - [ ] Unresolved items for future sessions -->
    ```
 
-4. **Ensure layered memory files exist:**
-
-   ```sh
-   mkdir -p docs/agent-sessions/memory
-   touch "docs/agent-sessions/memory/YYYY-MM-DD.md"
-   ```
-
-   If `docs/agent-sessions/MEMORY.md` does not exist, create it with:
+4. **Ensure durable memory exists.** If `docs/agent-sessions/MEMORY.md` does not exist, create it
+   with:
 
    ```markdown
    # Durable Memory
@@ -178,21 +170,13 @@ Parse `$ARGUMENTS` — if it equals `start` (or is empty), run this mode.
    <!-- Repeated failure modes and how to avoid them -->
    ```
 
-5. **Append a session-open breadcrumb** to `docs/agent-sessions/memory/YYYY-MM-DD.md`:
-
-   ```markdown
-   ## HH:MM {session-name} ({scope})
-   - Started on branch `{branch}`
-   - Session artifact: `docs/agent-sessions/YYYY-MM-DD-{session-name}-{scope}/memory.md`
-   ```
-
-6. **Stage the new files:**
+5. **Stage the new files:**
 
    ```sh
-   git add docs/agent-sessions/YYYY-MM-DD-{session-name}-{scope}/ docs/agent-sessions/memory/ docs/agent-sessions/MEMORY.md
+   git add docs/agent-sessions/YYYY-MM-DD-{session-name}-{scope}/ docs/agent-sessions/MEMORY.md
    ```
 
-7. **Print summary** — show all three memory paths and remind the user to update the session
+6. **Print summary** — show both memory paths and remind the user to update the session
    `memory.md` incrementally.
 
 ## Mode: `finalize`
@@ -224,14 +208,11 @@ Parse `$ARGUMENTS` — if it equals `finalize`, run this mode.
    in — Session, Date, Branch, and PR fields should not be placeholders. If any are still
    placeholders, warn the user.
 
-6. **Ensure layered files exist, then promote durable memory candidates.**
+6. **Ensure durable memory exists, then promote durable memory candidates.**
 
-   Before promoting, ensure layered memory files exist. This keeps `finalize` backward-compatible
-   with older sessions that only have `docs/agent-sessions/YYYY-MM-DD-.../memory.md`.
-
-   - If `docs/agent-sessions/MEMORY.md` does not exist, create it using the same template from
-     `start` mode.
-   - If `docs/agent-sessions/memory/YYYY-MM-DD.md` does not exist, create it.
+   Before promoting, if `docs/agent-sessions/MEMORY.md` does not exist, create it using the same
+   template from `start` mode. This keeps `finalize` backward-compatible with older sessions that
+   only have `docs/agent-sessions/YYYY-MM-DD-.../memory.md`.
 
    Review completed session sections (`Key Decisions`, `Problems Encountered`, `Outcome`,
    `Follow-ups`) and promote only durable items into `docs/agent-sessions/MEMORY.md`.
@@ -249,14 +230,6 @@ Parse `$ARGUMENTS` — if it equals `finalize`, run this mode.
    stale-but-historical entries into `docs/agent-sessions/MEMORY-archive.md` (not on the recall hot
    path), and if durable knowledge spans many topics, split it by topic so a recall loads only the
    relevant slice.
-
-   Also append a session-close breadcrumb to `docs/agent-sessions/memory/YYYY-MM-DD.md`:
-
-   ```markdown
-   ## HH:MM finalize {session-name} ({scope})
-   - Finalized `YYYY-MM-DD-{session-name}-{scope}`
-   - Durable memory updated.
-   ```
 
 7. **Stage and commit the session memory:**
 
