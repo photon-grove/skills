@@ -33,6 +33,11 @@ files make recall easier across many sessions.
    the run; do not curate heavily there.
 4. Update `docs/agent-sessions/MEMORY.md` during `finalize` by promoting durable items from the
    session artifact. Keep entries short, deduplicated, and date-stamped.
+5. Keep `MEMORY.md` lean. It is the file recall reads first, so its size is a context cost paid by
+   every future session. Session artifacts are the immutable record; `MEMORY.md` is the
+   deduplicated projection of *current* truth — not an append-only pile. When promoting, **dedup and
+   supersede in place**: edit the existing entry for a decision/fact/pitfall (and bump its date)
+   rather than appending a conflicting duplicate. Give each durable entry a `(source: ...)` pointer.
 
 ## Prerequisites
 
@@ -236,6 +241,13 @@ Parse `$ARGUMENTS` — if it equals `finalize`, run this mode.
    ```markdown
    - YYYY-MM-DD: <fact/decision/pitfall> (source: YYYY-MM-DD-{session-name}-{scope})
    ```
+
+   **Curate, don't just append.** Before adding an entry, search `MEMORY.md` for an existing one on
+   the same topic; if present, update it (and its date) in place instead of stacking a duplicate,
+   and delete entries proven wrong. Because recall reads `MEMORY.md` first, keep it small — rough
+   budget a few hundred lines. When a section outgrows a screenful, move superseded or
+   stale-but-historical entries into `docs/agent-sessions/MEMORY-archive.md`, which is not on the
+   recall hot path and is consulted only when an agent needs deeper history.
 
    Also append a session-close breadcrumb to `docs/agent-sessions/memory/YYYY-MM-DD.md`:
 
