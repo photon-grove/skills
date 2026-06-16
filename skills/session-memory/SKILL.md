@@ -244,10 +244,11 @@ Parse `$ARGUMENTS` — if it equals `finalize`, run this mode.
 
    **Curate, don't just append.** Before adding an entry, search `MEMORY.md` for an existing one on
    the same topic; if present, update it (and its date) in place instead of stacking a duplicate,
-   and delete entries proven wrong. Because recall reads `MEMORY.md` first, keep it small — rough
-   budget a few hundred lines. When a section outgrows a screenful, move superseded or
-   stale-but-historical entries into `docs/agent-sessions/MEMORY-archive.md`, which is not on the
-   recall hot path and is consulted only when an agent needs deeper history.
+   and delete entries proven wrong. Because recall reads `MEMORY.md` first in full, keep it
+   skimmable — soft budget ~250 lines / ~5k tokens. When it outgrows that, move superseded or
+   stale-but-historical entries into `docs/agent-sessions/MEMORY-archive.md` (not on the recall hot
+   path), and if durable knowledge spans many topics, split it by topic so a recall loads only the
+   relevant slice.
 
    Also append a session-close breadcrumb to `docs/agent-sessions/memory/YYYY-MM-DD.md`:
 
