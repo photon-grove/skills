@@ -183,8 +183,17 @@ aws cloudwatch list-dashboards --profile <profile> --output json
 ```
 
 Flag any alarm in **ALARM** state. If CloudWatch spend is material, pull Cost Explorer usage types
-to separate logs ingestion from alarms, dashboards, and custom metrics, and flag log groups driving
-high ingestion.
+to separate logs ingestion from alarms, dashboards, and custom metrics. The `IncomingBytes` command
+above is account-wide; to name the log groups driving ingestion, rank them per group:
+
+```sh
+aws logs describe-log-groups --profile <profile> \
+  --query 'reverse(sort_by(logGroups,&storedBytes))[:10].{Name:logGroupName,StoredBytes:storedBytes}' --output json
+# Per-group ingestion over the window (swap in a high-storage group):
+aws cloudwatch get-metric-statistics --profile <profile> \
+  --namespace AWS/Logs --metric-name IncomingBytes --dimensions Name=LogGroupName,Value=<group> \
+  --start-time <start> --end-time <now> --period <window-seconds> --statistics Sum
+```
 
 #### 3g. SQS (queues + DLQs)
 
@@ -197,11 +206,14 @@ aws sqs get-queue-attributes --profile <profile> --queue-url <url> \
 Flag any queue with **> 0 messages** — especially DLQs (name contains `dlq` / `dead-letter`); a
 growing DLQ is a health signal, not just cost.
 
-#### 3h. Conditional probes (only when the service shows in Cost Explorer)
+#### 3h. Long-tail probes
 
-Run these one-off lookups to attribute spend in the long tail; skip any that aren't billed.
+Run these lightweight inventory lookups to discover and attribute the long tail. **Don't gate them
+on a Cost Explorer row** — CE lags ~24h, so a same-day hosted zone, KMS key, or runaway EventBridge
+rule won't show in CE yet but still needs flagging (especially for a `24h` window). Use CE spend
+only to decide how deep to drill.
 
-| If billed | Probe |
+| Service | Probe |
 | --- | --- |
 | Route 53 ($0.50/zone) | `route53 list-hosted-zones`; `route53 list-health-checks`; `route53domains list-domains --region us-east-1` |
 | API Gateway | `apigateway get-rest-apis`; `apigatewayv2 get-apis`; `get-domain-names` + `get-api-mappings` per domain |
