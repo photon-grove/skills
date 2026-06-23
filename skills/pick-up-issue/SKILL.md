@@ -314,10 +314,13 @@ to the repo's `AGENTS.md`/`CONTRIBUTING.md` for any required sections or what to
 - Leave out routine CI hygiene (lint, typecheck, "ran the tests") — CI enforces it. Add a validation
   note only for change-specific checks CI doesn't cover.
 
-Write the body to a temp file and pass it with `--body-file` — don't inline shell-quoted Markdown:
+Write the body to a temp file and pass it with `--body-file` — don't inline shell-quoted Markdown.
+Use `mktemp` for a unique path so parallel agents (see the multi-agent note above) can't clobber
+each other's body:
 
 ```sh
-cat > /tmp/pr-body.md <<'EOF'
+body_file=$(mktemp -t pr-body.XXXXXX)
+cat > "$body_file" <<'EOF'
 ## Summary
 
 <why-first: the problem and impact, with inline links to specifics>
@@ -330,7 +333,8 @@ Closes #<number>
 
 🤖 Generated with Claude Code or Codex
 EOF
-gh pr create -R <owner>/<repo> --title "<concise title>" --body-file /tmp/pr-body.md
+gh pr create -R <owner>/<repo> --title "<concise title>" --body-file "$body_file"
+rm -f "$body_file"
 ```
 
 ### 9. Finalize session memory before shepherding
