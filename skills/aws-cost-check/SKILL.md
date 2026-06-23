@@ -1,166 +1,101 @@
 ---
 name: aws-cost-check
-description: Comprehensive AWS account cost audit — discovers all active resources, checks for runaway costs, and flags free tier limits
+description: Discovery-driven AWS account cost audit — finds active resources, attributes spend, and flags runaway costs, errors, and anomalies
 disable-model-invocation: true
 ---
 
 # AWS Cost Check
 
-Perform a thorough cost and health audit of an AWS account. Discovers active services and
-resources, checks for runaway costs or loops, flags resources approaching free tier limits, and
-provides a cost breakdown with clear attribution gaps.
+Audit the cost and health of an AWS account. Discover what's actually running, attribute Cost
+Explorer spend to it, and flag anomalies (runaway loops, error storms, DLQ buildup, throttling,
+idle expensive resources, cost spikes).
 
-This is a **generic, discovery-driven** audit — it does not assume any particular application
-architecture. It inspects whatever is running in the account.
+This is a **generic, discovery-driven** audit — it inspects whatever is in the account and makes
+no assumptions about application architecture.
 
 ## Input
 
 `<args>` may contain:
 
-- **Optional:** An AWS profile name. If not provided, check the repo's AGENTS.md or CLAUDE.md for an
-  `## AWS Cost Check` section that specifies a default profile. If no repo-level config exists
-  either, fall back to the AWS CLI default profile (no `--profile` flag).
-- **Optional:** A time window like `24h`, `7d`, `mtd` (default: `mtd` = month-to-date).
+- **Profile** (optional): an AWS profile name. If omitted, check the repo's AGENTS.md / CLAUDE.md
+  for an `## AWS Cost Check` section with a default profile; else fall back to the AWS CLI default.
+- **Window** (optional): `24h`, `7d`, `mtd` (default `mtd` = month-to-date).
 
-Examples:
-
-- `/aws-cost-check` — month-to-date audit with the repo-configured or default AWS profile
-- `/aws-cost-check 24h` — last 24 hours
-- `/aws-cost-check my-profile 7d` — custom profile, last 7 days
-- `/aws-cost-check mtd` — explicit month-to-date
+Examples: `/aws-cost-check` · `/aws-cost-check 24h` · `/aws-cost-check my-profile 7d`
 
 ## Prerequisites
 
-- The `aws` CLI must be installed and the profile must be authenticated.
-- The profile needs read access to Cost Explorer, CloudWatch, and the ability to list resources
-  (Lambda, DynamoDB, SQS, SNS, S3, etc.).
-- If possible, the profile should also be able to read Route 53 global resources, API Gateway
-  custom domains, Budgets, and KMS key metadata. If any of these calls are denied, report the
-  exact permission gap in the summary instead of silently skipping it.
-- **Repo-level configuration:** Repos can define an `## AWS Cost Check` section in AGENTS.md or
-  CLAUDE.md to specify:
-  - default payer profile
-  - auth command (for example SSO login)
-  - optional linked-account read-only profiles for deeper resource enumeration
-  Always check AGENTS.md or CLAUDE.md before falling back to defaults.
-- **Region + account scope:** Cost Explorer is global and may include multiple linked accounts and
-  regions. Resource enumeration is per-account/per-region. Always identify these scope boundaries in
-  the final attribution section.
-- **Cursor/Codex sandbox note:** In tool-sandboxed environments, AWS CLI cache writes may fail
-  (`Operation not permitted`). **SSO** sessions typically use `~/.aws/sso/cache`; other cached
-  credential material may use `~/.aws/cli/cache`. If either path cannot be written, rerun AWS
-  commands outside the sandbox / with elevated permissions and document that adjustment.
-- **IAM / permission sets:** In `bkonkle-dev/apps`, the payer `billing-admin` SSO inline policy
-  includes statement `AwsCostCheckResourceDiscoveryReadOnly` in `infra/management/sso_billing.tf`.
-  After Terraform changes to that permission set, the user must start a **new** SSO session
-  (`aws sso login --profile <profile>`) before retesting; Identity Center does not refresh
-  in-flight credentials.
+- `aws` CLI installed and the profile authenticated.
+- Profile needs read on Cost Explorer + CloudWatch and list access to the relevant services
+  (Lambda, DynamoDB, SQS, S3, EC2, etc.). Route 53, API Gateway domains, Budgets, and KMS metadata
+  improve attribution — if any call is **denied, report the exact action** in Attribution Gaps
+  rather than silently skipping.
+- **Scope:** Cost Explorer is global and may span linked accounts + regions; resource enumeration
+  is per-account/per-region. Identify these boundaries in the final attribution section.
+- **Repo config:** repos can set a default payer profile, auth command (e.g. SSO login), and
+  linked-account read-only profiles in an `## AWS Cost Check` section. Check it before defaulting.
+- **bkonkle-dev/apps note:** the `billing-admin` SSO inline policy grants discovery via statement
+  `AwsCostCheckResourceDiscoveryReadOnly` (`infra/management/sso_billing.tf`). After Terraform
+  changes there, the user must start a **new** SSO session before retesting — Identity Center does
+  not refresh in-flight credentials.
+- **Sandbox note (Cursor/Codex):** AWS CLI cache writes (`~/.aws/sso/cache`, `~/.aws/cli/cache`)
+  may fail with `Operation not permitted`; rerun outside the sandbox / with elevated permissions
+  and document the adjustment.
 
 ## Steps
 
-### 1. Check repo configuration and authenticate
+### 1. Authenticate
 
-First, determine the profile to use:
-
-1. If a profile was specified in `<args>`, use that.
-2. Otherwise, check the repo's AGENTS.md or CLAUDE.md for an `## AWS Cost Check` section with a default profile.
-3. If neither exists, use the AWS CLI default profile (no `--profile` flag).
-
-Verify credentials:
+Resolve the profile (args → repo config → default), then verify:
 
 ```sh
 aws sts get-caller-identity --profile <profile>
 ```
 
-If this fails with a credentials error:
+On a credentials error: for SSO run `aws sso login --profile <profile>` and retry after the user
+completes the browser login; for static creds, ask how they'd like to authenticate. Print the
+account ID, role, and default region so the user knows what's being audited.
 
-- **SSO profiles:** Run `aws sso login --profile <profile>` and wait for the user to complete the
-  browser login, then retry `get-caller-identity`.
-- **Static credentials:** Inform the user that credentials are not configured and ask how they'd
-  like to authenticate.
+### 2. Cost Explorer — attribute the spend
 
-Print the account ID, assumed role, and default region so the user knows which account and region are
-being audited.
-
-If the audit runs in Cursor/Codex and STS fails with cache permission errors (often under
-`~/.aws/sso/cache` or `~/.aws/cli/cache`), rerun with elevated tool permissions before continuing.
-
-### 2. Cost Explorer — top-level billing
-
-Fetch the month-to-date (or specified window) cost breakdown by service:
+Get the by-service breakdown for the window and present a table (service, cost, % of total),
+sorted descending:
 
 ```sh
 aws ce get-cost-and-usage --profile <profile> \
-  --time-period Start=<start>,End=<end> \
-  --granularity MONTHLY \
-  --metrics UnblendedCost \
-  --group-by Type=DIMENSION,Key=SERVICE \
-  --output json
+  --time-period Start=<start>,End=<end> --granularity MONTHLY \
+  --metrics UnblendedCost --group-by Type=DIMENSION,Key=SERVICE --output json
 ```
 
-Parse results and present a table sorted by cost descending. Include:
-
-- Service name
-- Cost ($)
-- % of total
-
-Also fetch the **daily trend** for the window to detect spikes:
+Then fetch the **daily trend** and flag any day **> 2x the average** of the rest:
 
 ```sh
 aws ce get-cost-and-usage --profile <profile> \
-  --time-period Start=<start>,End=<end> \
-  --granularity DAILY \
-  --metrics UnblendedCost \
-  --output json
+  --time-period Start=<start>,End=<end> --granularity DAILY \
+  --metrics UnblendedCost --output json
 ```
 
-Flag any day where cost is **> 2x the average** of the other days.
+Also pull **LINKED_ACCOUNT** and **REGION** splits (same shape, swap the `--group-by Key`) so you
+know where to enumerate. If a non-payer account drives spend, switch to a linked-account read-only
+profile to enumerate there, or call out the attribution risk if unavailable.
 
-If the top billed services do not match the current inventory, drill into those services by
-**usage type** before concluding the audit. This often explains deleted, global, or cross-region
-resources.
-
-Example:
+When a top billed service doesn't match inventory, drill into it by **USAGE_TYPE** before
+concluding — this usually explains deleted, global, or cross-region resources:
 
 ```sh
 aws ce get-cost-and-usage --profile <profile> \
-  --time-period Start=<start>,End=<end> \
-  --granularity MONTHLY \
-  --metrics UnblendedCost \
+  --time-period Start=<start>,End=<end> --granularity MONTHLY --metrics UnblendedCost \
   --group-by Type=DIMENSION,Key=USAGE_TYPE \
-  --filter '{"Dimensions":{"Key":"SERVICE","Values":["Amazon DynamoDB"]}}' \
-  --output json
+  --filter '{"Dimensions":{"Key":"SERVICE","Values":["Amazon DynamoDB"]}}' --output json
 ```
 
-Also fetch **linked account** and **region** splits so you know where to enumerate resources next:
+### 3. Enumerate active resources
 
-```sh
-aws ce get-cost-and-usage --profile <profile> \
-  --time-period Start=<start>,End=<end> \
-  --granularity MONTHLY \
-  --metrics UnblendedCost \
-  --group-by Type=DIMENSION,Key=LINKED_ACCOUNT \
-  --output json
+List what's running and pull CloudWatch metrics over the window. **Lead with services that have
+meaningful spend** (e.g. > $0.01); skip services that return empty. Estimate cost from observed
+usage, and reconcile against the Cost Explorer total — the billed number wins when they disagree.
 
-aws ce get-cost-and-usage --profile <profile> \
-  --time-period Start=<start>,End=<end> \
-  --granularity MONTHLY \
-  --metrics UnblendedCost \
-  --group-by Type=DIMENSION,Key=REGION \
-  --output json
-```
-
-If a non-payer linked account drives spend, either:
-- switch to a configured linked-account read-only profile and enumerate there, or
-- explicitly call out attribution risk if that profile is unavailable.
-
-### 3. Discover active resources
-
-Enumerate what's actually running in the account. For each service below, list resources and collect
-metrics. Prioritize services with meaningful spend (for example, >$0.01 in window) before deep dives.
-**Skip services that return empty results** — only report on what exists.
-
-#### 3a. Lambda functions
+#### 3a. Lambda
 
 ```sh
 aws lambda list-functions --profile <profile> \
@@ -168,329 +103,143 @@ aws lambda list-functions --profile <profile> \
   --output json
 ```
 
-For each function, fetch from CloudWatch over the time window:
+Per function, over the window: **Invocations** (Sum), **Errors** (Sum), **Duration** (Avg ms),
+**Throttles** (Sum). Derive error rate (`Errors/Invocations`) and GB-seconds
+(`Invocations * AvgDuration_sec * Memory_MB / 1024`). Flag high invocation counts with no clear
+schedule, error rate > 20%, or any throttles.
 
-- **Invocations** (Sum)
-- **Errors** (Sum)
-- **Duration** (Average, in ms)
-- **Throttles** (Sum)
-
-Calculate for each function:
-
-- Error rate = Errors / Invocations * 100
-- GB-seconds = Invocations * AvgDuration_sec * Memory_MB / 1024
-
-**Free tier comparison** (always-free after 12 months is NOT available; 12-month free tier):
-
-- 1,000,000 requests/month
-- 400,000 GB-seconds/month
-
-Sum all functions and show % of free tier consumed. Flag if **> 80%**.
-
-#### 3b. DynamoDB tables
+#### 3b. DynamoDB
 
 ```sh
 aws dynamodb list-tables --profile <profile> --output json
-```
-
-For each table, get billing mode and metrics:
-
-```sh
 aws dynamodb describe-table --profile <profile> --table-name <table> \
   --query 'Table.{BillingMode:BillingModeSummary.BillingMode,ItemCount:ItemCount,TableSizeBytes:TableSizeBytes}'
 ```
 
-CloudWatch metrics per table:
+Per table from CloudWatch: **ConsumedRead/WriteCapacityUnits** (Sum), **ThrottledRequests** (Sum),
+**SystemErrors** (Sum). Cost: on-demand $1.25/1M WRU, $0.25/1M RRU; storage $0.25/GB-month. Flag
+any throttled requests or system errors > 0.
 
-- **ConsumedReadCapacityUnits** (Sum)
-- **ConsumedWriteCapacityUnits** (Sum)
-- **ThrottledRequests** (Sum)
-- **SystemErrors** (Sum)
-
-Estimate cost:
-
-- On-demand: $1.25/1M write request units, $0.25/1M read request units
-- Storage: $0.25/GB/month
-
-**Free tier:** 25 RCU + 25 WCU always-free (provisioned mode only), 25 GB storage always-free.
-
-Flag any **throttled requests > 0** or **system errors > 0**.
-
-#### 3c. SQS queues
-
-```sh
-aws sqs list-queues --profile <profile> --output json
-```
-
-For each queue, check depth:
-
-```sh
-aws sqs get-queue-attributes --profile <profile> --queue-url <url> \
-  --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible \
-    ApproximateNumberOfMessagesDelayed
-```
-
-Flag any queue with **> 0 messages** (especially DLQs — queues with "dead-letter" or "dlq" in the
-name).
-
-**Free tier:** 1,000,000 requests/month (always-free).
-
-#### 3d. SNS topics
-
-```sh
-aws sns list-topics --profile <profile> --output json
-```
-
-Check CloudWatch for publish volume:
-
-```sh
-aws cloudwatch get-metric-statistics --profile <profile> \
-  --namespace AWS/SNS --metric-name NumberOfMessagesPublished \
-  --dimensions Name=TopicName,Value=<topic> \
-  --start-time <start> --end-time <now> \
-  --period <window-seconds> --statistics Sum
-```
-
-**Free tier:** 1,000,000 publishes/month, 100,000 HTTP/S deliveries (always-free).
-
-#### 3e. API Gateway
-
-```sh
-aws apigateway get-rest-apis --profile <profile> --output json
-aws apigatewayv2 get-apis --profile <profile> --output json
-aws apigatewayv2 get-domain-names --profile <profile> --output json
-# For each custom domain:
-aws apigatewayv2 get-api-mappings --profile <profile> --domain-name <domain-name> --output json
-```
-
-If APIs exist, check invocation counts via CloudWatch (`AWS/ApiGateway`, metric `Count`).
-
-Also list **custom domains** and API mappings.
-
-**Free tier:** 1,000,000 REST API calls/month for 12 months.
-
-#### 3f. S3 buckets
+#### 3c. S3
 
 ```sh
 aws s3api list-buckets --profile <profile> --output json
-```
-
-For each bucket, check size via CloudWatch:
-
-```sh
 aws cloudwatch get-metric-statistics --profile <profile> \
   --namespace AWS/S3 --metric-name BucketSizeBytes \
   --dimensions Name=BucketName,Value=<bucket> Name=StorageType,Value=StandardStorage \
-  --start-time <2-days-ago> --end-time <now> \
-  --period 86400 --statistics Average
+  --start-time <2-days-ago> --end-time <now> --period 86400 --statistics Average
 ```
 
-Do not stop at `StandardStorage` if Cost Explorer shows S3 spend but the metric is zero. Check the
-bucket region and inspect other storage classes or Cost Explorer usage types. Remember `BucketSizeBytes`
-often lags and can be empty for new/low-activity buckets; do not assume zero-cost from empty datapoints.
+`BucketSizeBytes` lags and is often empty for new/low-activity buckets — don't infer zero cost from
+empty datapoints. If Cost Explorer shows S3 spend but the metric is zero, check the bucket region
+and other storage classes / usage types.
 
-**Free tier:** 5 GB storage, 20,000 GET, 2,000 PUT for 12 months.
-
-#### 3g. Bedrock (AI/ML)
+#### 3d. Bedrock
 
 ```sh
 aws cloudwatch list-metrics --profile <profile> \
-  --namespace AWS/Bedrock --metric-name Invocations \
-  --query 'Metrics[].Dimensions'
+  --namespace AWS/Bedrock --metric-name Invocations --query 'Metrics[].Dimensions'
 ```
 
-If Bedrock metrics exist, for each model:
+If metrics exist, per model collect **Invocations**, **Input/OutputTokenCount** (if available), and
+**InvocationLatency** (Avg). Estimate cost from the **actual model IDs / Cost Explorer usage types
+you observe** — do not assume a Claude-only price table (accounts may use Anthropic, Nova, or
+inference profiles). If token counts are missing, approximate ~1K in / ~300 out per invocation and
+mark it approximate. Bedrock has no free allowance and is often a top cost driver — surface it
+prominently when invocations exist.
 
-- **Invocations** (Sum)
-- **InputTokenCount** (Sum) — if available
-- **OutputTokenCount** (Sum) — if available
-- **InvocationLatency** (Average)
-
-Estimate cost from the **actual model IDs or Cost Explorer usage types you observe**. Do not rely
-on a hard-coded Claude-only price table; accounts may use Anthropic, Nova, or inference profiles.
-If pricing is unclear, report tokens/invocations and the billed amount from Cost Explorer rather
-than guessing.
-
-If token counts aren't available, estimate ~1K input + ~300 output tokens per invocation and mark
-the result as approximate.
-
-**Free tier:** None for Bedrock. Flag this prominently if invocations exist.
-
-#### 3h. EventBridge
-
-```sh
-aws events list-rules --profile <profile> --output json
-```
-
-List rules with their schedules and targets. Check for rules firing at unexpectedly high frequency.
-
-**Free tier:** All state change events free. Custom events and partner events $1.00/1M.
-
-#### 3i. CloudWatch Logs
-
-```sh
-aws cloudwatch get-metric-statistics --profile <profile> \
-  --namespace AWS/Logs --metric-name IncomingBytes \
-  --start-time <start> --end-time <now> \
-  --period <window-seconds> --statistics Sum
-```
-
-**Free tier:** 5 GB ingestion, 5 GB storage, 5 GB scanned for 12 months. Always-free: 10 custom
-metrics, 10 alarms.
-
-Flag if ingestion is **> 4 GB/month** (approaching 5 GB limit).
-
-#### 3j. Route 53
-
-```sh
-aws route53 list-hosted-zones --profile <profile> --output json
-aws route53 list-health-checks --profile <profile> --output json
-aws route53domains list-domains --profile <profile> --region us-east-1 --output json
-```
-
-Each hosted zone costs $0.50/month. No free tier for hosted zones.
-
-Also check for health checks and registered domains when permissions allow. `route53domains`
-requires **`route53domains:ListDomains`** (API is only offered from **`us-east-1`** in the CLI). If
-these commands are denied, report the access gap explicitly because it weakens attribution for
-Route 53 charges.
-
-#### 3k. CloudWatch Alarms
-
-```sh
-aws cloudwatch describe-alarms --profile <profile> \
-  --query '{MetricAlarms: MetricAlarms[].{Name:AlarmName,State:StateValue}, CompositeAlarms: CompositeAlarms[].{Name:AlarmName,State:StateValue}}' --output json
-aws cloudwatch list-dashboards --profile <profile> --output json
-```
-
-Check for any alarms in **ALARM** state — these indicate active problems.
-
-Count both **metric alarms** and **composite alarms**. If CloudWatch spend is material, fetch Cost
-Explorer usage types so you can separate alarm monitoring from logs, dashboards, and custom metrics.
-
-**Free tier:** 10 alarms always-free.
-
-#### 3l. KMS
-
-```sh
-aws kms list-keys --profile <profile> --output json
-aws kms list-aliases --profile <profile> --output json
-```
-
-If AWS KMS appears in Cost Explorer, inventory keys and aliases. Use Cost Explorer usage types for
-precise attribution.
-
-**Free tier:** None for customer-managed keys.
-
-#### 3m. AWS Budgets
-
-```sh
-aws budgets describe-budgets --profile <profile> --account-id <account-id> --output json
-```
-
-List budget names, time units, and limits.
-
-#### 3n. EC2 / ECS / RDS
-
-Quick check for running compute that might be burning money:
+#### 3e. EC2 / ECS / RDS
 
 ```sh
 aws ec2 describe-instances --profile <profile> \
   --filters "Name=instance-state-name,Values=running" \
-  --query 'Reservations[].Instances[].{Id:InstanceId,Type:InstanceType,LaunchTime:LaunchTime}' \
-  --output json
-
+  --query 'Reservations[].Instances[].{Id:InstanceId,Type:InstanceType,LaunchTime:LaunchTime}' --output json
 aws ecs list-clusters --profile <profile> --output json
 aws rds describe-db-instances --profile <profile> \
-  --query 'DBInstances[].{Id:DBInstanceIdentifier,Class:DBInstanceClass,Status:DBInstanceStatus}' \
-  --output json 2>/dev/null
+  --query 'DBInstances[].{Id:DBInstanceIdentifier,Class:DBInstanceClass,Status:DBInstanceStatus}' --output json 2>/dev/null
 ```
 
-When **EC2 - Other** (EBS) or **VPC** (public IPv4) spend shows up in Cost Explorer but running
-instance inventory is thin, also list **EBS volumes** and **Elastic IPs** (stopped instances and
-orphan volumes/EIPs are common drivers):
+When **EC2 - Other** (EBS) or **VPC** (public IPv4) spend appears but running inventory is thin,
+also list volumes and Elastic IPs — orphan volumes and unattached EIPs are common drivers:
 
 ```sh
 aws ec2 describe-volumes --profile <profile> \
-  --query 'Volumes[].{Id:VolumeId,State:State,Size:Size,Type:VolumeType,Attachments:Attachments}' \
-  --output json
-
+  --query 'Volumes[].{Id:VolumeId,State:State,Size:Size,Type:VolumeType,Attachments:Attachments}' --output json
 aws ec2 describe-addresses --profile <profile> --output json
 ```
 
-Flag any **running EC2 instances**, active ECS clusters, or RDS instances — these are typically the
-most expensive resources.
+Flag any running instances, active ECS clusters, or RDS instances — typically the priciest
+resources.
 
-#### 3o. Secrets Manager (when billed)
-
-If **AWS Secrets Manager** appears in Cost Explorer for this account, list secret **metadata** (not
-values) to correlate monthly per-secret charges:
+#### 3f. CloudWatch (logs, alarms, dashboards)
 
 ```sh
-aws secretsmanager list-secrets --profile <profile> --output json
+aws cloudwatch get-metric-statistics --profile <profile> \
+  --namespace AWS/Logs --metric-name IncomingBytes \
+  --start-time <start> --end-time <now> --period <window-seconds> --statistics Sum
+aws cloudwatch describe-alarms --profile <profile> \
+  --query '{Metric:MetricAlarms[].{Name:AlarmName,State:StateValue},Composite:CompositeAlarms[].{Name:AlarmName,State:StateValue}}' --output json
+aws cloudwatch list-dashboards --profile <profile> --output json
 ```
 
-#### 3p. EFS (when billed)
+Flag any alarm in **ALARM** state. If CloudWatch spend is material, pull Cost Explorer usage types
+to separate logs ingestion from alarms, dashboards, and custom metrics, and flag log groups driving
+high ingestion.
 
-If **Amazon EFS** appears in Cost Explorer for this account:
+#### 3g. SQS (queues + DLQs)
 
 ```sh
-aws efs describe-file-systems --profile <profile> --output json
+aws sqs list-queues --profile <profile> --output json
+aws sqs get-queue-attributes --profile <profile> --queue-url <url> \
+  --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible ApproximateNumberOfMessagesDelayed
 ```
 
-### 4. Free tier dashboard
+Flag any queue with **> 0 messages** — especially DLQs (name contains `dlq` / `dead-letter`); a
+growing DLQ is a health signal, not just cost.
 
-Compile a summary table of all services with free tier limits:
+#### 3h. Conditional probes (only when the service shows in Cost Explorer)
 
-| Service | Free Tier Limit | Your Usage | % Used | Status |
-| --- | --- | --- | --- | --- |
-| Lambda Requests | 1M/month | X | Y% | OK/WARN/OVER |
-| Lambda Compute | 400K GB-sec | X | Y% | OK/WARN/OVER |
-| ... | ... | ... | ... | ... |
+Run these one-off lookups to attribute spend in the long tail; skip any that aren't billed.
 
-Status levels:
+| If billed | Probe |
+| --- | --- |
+| Route 53 ($0.50/zone) | `aws route53 list-hosted-zones`; `list-health-checks`; `route53domains list-domains --region us-east-1` |
+| API Gateway | `apigateway get-rest-apis`; `apigatewayv2 get-apis`; `get-domain-names` + `get-api-mappings` per domain |
+| SNS | `sns list-topics`; CloudWatch `AWS/SNS NumberOfMessagesPublished` (Sum) per topic |
+| EventBridge | `events list-rules` — check for rules firing at unexpectedly high frequency |
+| KMS | `kms list-keys`; `kms list-aliases` — attribute via Cost Explorer usage types |
+| Secrets Manager | `secretsmanager list-secrets` (metadata only, never values) |
+| EFS | `efs describe-file-systems` |
+| Budgets | `budgets describe-budgets --account-id <account-id>` — list names, units, limits |
 
-- **OK** — < 50% of free tier
-- **WATCH** — 50-80% of free tier
-- **WARN** — > 80% of free tier
-- **OVER** — exceeding free tier
-- **N/A** — no free tier for this service
+`route53domains:ListDomains` is only offered from **`us-east-1`**; if denied, note the gap — it
+weakens Route 53 attribution.
 
-### 5. Anomaly detection
+### 4. Anomaly detection
 
 Flag anything unusual:
 
-- **Runaway loops:** Any Lambda with > 10,000 invocations/day without a clear schedule-based reason
-- **Error storms:** Any resource with > 20% error rate
-- **DLQ buildup:** Any DLQ with growing message count
-- **Throttling:** Any DynamoDB throttles or Lambda throttles
-- **Idle expensive resources:** Running EC2/RDS/ECS with zero or near-zero utilization
-- **Cost spikes:** Any day with cost > 2x the average
-- **Alarms firing:** Any CloudWatch alarm in ALARM state
-- **Spend without matching inventory:** A billed service has meaningful cost but the current
-  resource inventory is empty or near-empty; usually means deleted earlier-in-window resources,
-  linked-account resources, global resources, cross-region resources, or missing permissions
+- **Runaway loops:** Lambda > 10,000 invocations/day with no schedule-based reason.
+- **Error storms:** any resource with > 20% error rate.
+- **DLQ buildup:** any DLQ with a growing message count.
+- **Throttling:** any DynamoDB or Lambda throttles.
+- **Idle expensive resources:** running EC2/RDS/ECS with near-zero utilization.
+- **Cost spikes:** any day > 2x the window average.
+- **Alarms firing:** any CloudWatch alarm in ALARM state.
+- **Spend without inventory:** a service has meaningful cost but inventory is empty/near-empty —
+  usually deleted-in-window, linked-account, global, cross-region resources, or missing permissions.
 
-### 6. Print summary
+### 5. Print summary
 
-Present the results in clear sections:
-
-1. **Account Info** — account ID, profile, time window
-2. **Cost Overview** — total MTD spend, daily average, projected monthly total
-3. **Cost by Service** — table sorted by cost descending
-4. **Daily Trend** — flag any cost spikes
-5. **Resource Details** — per-service tables (only for services with active resources)
-6. **Free Tier Status** — dashboard table with % used and status
-7. **Alerts** — any warnings, ordered by severity:
-   - 🔴 Critical: runaway costs, ALARM state, throttling
-   - 🟡 Warning: approaching free tier limits, error rates > 10%, DLQ buildup
-   - 🟢 OK: everything within normal parameters
-8. **Estimated Cost Without Free Tier** — what the bill would be at full pricing, or state that
-   billed cost is already near full pricing when free-tier impact is immaterial
-9. **Attribution Gaps** — any denied API calls, cross-region blind spots, or billed services whose
-   current inventory did not explain the spend
-
-In **Attribution Gaps**, always include:
-- permission-denied APIs (verbatim action names)
-- linked-account blind spots (if cost is in an account you could not enumerate)
-- region blind spots (if non-default regions were billed but not enumerated)
+1. **Account Info** — account ID, profile, time window.
+2. **Cost Overview** — total spend, daily average, projected monthly total.
+3. **Cost by Service** — table sorted by cost descending.
+4. **Daily Trend** — flag spikes.
+5. **Resource Details** — per-service tables, only for services with active resources.
+6. **Alerts** — ordered by severity:
+   - 🔴 Critical: runaway costs, ALARM state, throttling.
+   - 🟡 Warning: error rates > 10%, DLQ buildup, idle expensive resources.
+   - 🟢 OK: within normal parameters.
+7. **Attribution Gaps** — always include permission-denied APIs (verbatim action names),
+   linked-account blind spots (cost in an account you couldn't enumerate), and region blind spots
+   (non-default regions billed but not enumerated).
