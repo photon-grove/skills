@@ -203,7 +203,7 @@ Run these one-off lookups to attribute spend in the long tail; skip any that are
 
 | If billed | Probe |
 | --- | --- |
-| Route 53 ($0.50/zone) | `aws route53 list-hosted-zones`; `list-health-checks`; `route53domains list-domains --region us-east-1` |
+| Route 53 ($0.50/zone) | `route53 list-hosted-zones`; `route53 list-health-checks`; `route53domains list-domains --region us-east-1` |
 | API Gateway | `apigateway get-rest-apis`; `apigatewayv2 get-apis`; `get-domain-names` + `get-api-mappings` per domain |
 | SNS | `sns list-topics`; CloudWatch `AWS/SNS NumberOfMessagesPublished` (Sum) per topic |
 | EventBridge | `events list-rules` — check for rules firing at unexpectedly high frequency |
