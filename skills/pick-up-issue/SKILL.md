@@ -299,28 +299,43 @@ git push -u origin HEAD
 
 ### 8. Open a pull request
 
-Create a PR that links to the issue:
+Write a concise, link-heavy body — a reviewer should grasp **why** and **what** in under a minute
+and reach the evidence in one click. Prefer a precise link over prose ("show, don't tell"); defer
+to the repo's `AGENTS.md`/`CONTRIBUTING.md` for any required sections or what to omit.
+
+- **`## Summary`** — 1–3 sentences, why-first: the problem/impact, with one clause of background to
+  orient a newcomer. Inline links carry the specifics.
+- **`## Change`** — what changed, linking the key call sites/functions. Link code at a pinned commit
+  SHA, not a branch name (branches rot on the next push): resolve with `git rev-parse HEAD`, find
+  lines with `grep -n` → `https://github.com/<owner>/<repo>/blob/<sha>/<path>#L<line>`. Note
+  scope/safety.
+- Add `Closes #<number>` so GitHub auto-closes the issue on merge. Link related PRs/issues with
+  **full URLs**, never bare `#123`.
+- Leave out routine CI hygiene (lint, typecheck, "ran the tests") — CI enforces it. Add a validation
+  note only for change-specific checks CI doesn't cover.
+
+Write the body to a temp file and pass it with `--body-file` — don't inline shell-quoted Markdown.
+Use `mktemp` for a unique path so parallel agents (see the multi-agent note above) can't clobber
+each other's body:
 
 ```sh
-gh pr create -R <owner>/<repo> --title "<concise title>" --body "$(cat <<'EOF'
+body_file=$(mktemp -t pr-body.XXXXXX)
+cat > "$body_file" <<'EOF'
 ## Summary
 
-<1-3 bullet points describing the change>
+<why-first: the problem and impact, with inline links to specifics>
 
-## Issue
+## Change
+
+<what changed, linking the key call sites at a pinned SHA; note scope/safety>
 
 Closes #<number>
 
-## Test plan
-
-- [ ] <how to verify the change>
-
 🤖 Generated with Claude Code or Codex
 EOF
-)"
+gh pr create -R <owner>/<repo> --title "<concise title>" --body-file "$body_file"
+rm -f "$body_file"
 ```
-
-Use `Closes #<number>` in the body so GitHub auto-closes the issue when the PR merges.
 
 ### 9. Finalize session memory before shepherding
 
