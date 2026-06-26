@@ -262,6 +262,21 @@ discussions or references.
    conventions.
 3. Identify the files that need to change and the expected impact.
 4. Plan the implementation.
+5. **Confirm the root cause against ground truth before coding.** Plans and read-only query tools
+   are hypotheses, not proof. Before writing the first fix, reproduce or directly locate the root
+   cause in source code, build output, or live data. If you're about to change a config or wiring,
+   read the existing file first — don't propose additions without knowing what's already there. A
+   plan that names the wrong file or wrong line costs a full rework cycle; one read-then-verify step
+   prevents it.
+
+**Sub-agent path discipline:** When you spawn search or plan sub-agents, instruct them explicitly:
+
+> Return all file paths **relative to the worktree root** (not absolute). For example,
+> `src/auth/token.ts`, not `/home/user/.claude/worktrees/<name>/src/auth/token.ts`.
+
+Before the parent agent makes its first edit, rewrite any absolute path a sub-agent returns to the
+active worktree root. Never trust an absolute path from a sub-agent — multi-worktree setups have
+more than one checkout, and an edit to the wrong absolute path silently lands in the wrong tree.
 
 **While implementing:**
 
@@ -280,6 +295,16 @@ discussions or references.
 1. Run the project's test suite, linter, and type checker.
 2. Fix any failures before proceeding.
 
+**Lockfile and manifest hygiene:** After running package-manager commands (install, add, update) or
+build tasks that may touch generated files, inspect for incidental churn before staging:
+
+```sh
+git diff -- '**/package.json' '**/go.mod' '**/go.sum' pnpm-lock.yaml package-lock.json yarn.lock
+```
+
+Revert any churn that is not directly required by the change (e.g., unrelated version bumps,
+whitespace diffs in lock files). Stage only the diffs that belong to the fix.
+
 ### 7. Verify and push
 
 Before pushing, confirm you're on the correct branch and it tracks the right remote:
@@ -290,6 +315,26 @@ git branch -vv | grep '^\*'
 
 Verify the output shows your feature branch tracking `origin/<your-branch>`, not `main` or another
 branch. If something looks wrong, **stop and fix it** before pushing.
+
+**Pre-ready self-review — recurring P1 families.** Before marking the PR ready, scan the diff for
+these recurring failure modes:
+
+1. **Re-issuable commands produce a deterministic, stable ID.** Any derived ID (slug, filename,
+   resource name, cache key) must be the same if the command is re-run with the same inputs. An ID
+   that embeds `$(date)` or a random value will silently diverge on a retry, creating duplicate
+   artifacts or broken references. Verify that IDs derive only from stable inputs (issue number,
+   branch name, commit SHA).
+
+2. **Error classification over a shared channel uses a boundary sentinel.** When routing errors
+   from a shared queue or channel, each consumer must match only its own error class. A missing
+   boundary (e.g., a too-broad catch or a missing namespace prefix) lets one consumer swallow
+   another's errors, causing silent data loss. Verify that each handler has a clear, non-overlapping
+   selector and that unmatched messages fall through to a default or dead-letter path.
+
+3. **A filter or CLI must not exclude its own targets.** If the change adds or modifies a filter
+   (label filter, glob, `--exclude`, `--search`) or CLI argument parser, verify that the filter's
+   own invocation is not itself excluded. A filter that omits the very item it is searching for
+   returns empty results silently. Spot-check with a concrete example value.
 
 Then push:
 
@@ -342,6 +387,11 @@ rm -f "$body_file"
 Before shepherding, ensure the session memory is finalized and included in the PR's commit chain.
 Session memories committed after the PR is created (or on a different branch) can get stranded when
 the PR squash-merges.
+
+**Land session artifacts on the first push.** The session memory commit must reach the remote
+before CI runs its presence-gate check. If you commit session memory after the initial push, a
+CI presence-gate may already be failing — and you'll need an extra push round-trip to fix it.
+Commit and push session memory as part of the same push that opens the PR, not as a follow-up.
 
 If a session memory was started in step 5:
 
