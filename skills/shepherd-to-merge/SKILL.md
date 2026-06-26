@@ -99,6 +99,17 @@ After each PR reaches `MERGED`, print a one-line progress update:
 
 - `Completed <index>/<total>: #<number> <title> (<url>)`
 
+**Re-read the live PR number at each step.** Never rely on a PR number carried in context from a
+previous session or a previous step in this session — a PR can be closed and re-created, or the
+queue can shift. At the start of every step that targets a PR, read the authoritative number
+directly from the tool:
+
+```sh
+gh pr view --json number --jq .number
+```
+
+Use the number returned by the command, not the one cached in your reasoning context.
+
 ### 4. Check out the PR branch
 
 Ensure you're in the repo and check out the PR branch:
@@ -116,6 +127,15 @@ subagent should:
 - Review for correctness, security issues, performance concerns, and style consistency
 - Return a structured summary: a list of issues found (with file, line, and description) and an
   overall assessment (approve, request changes, or comment)
+
+**Sub-agent path discipline:** Instruct the review sub-agent explicitly:
+
+> Return all file paths **relative to the worktree root** (not absolute). For example,
+> `src/auth/token.ts`, not `/home/user/.claude/worktrees/<name>/src/auth/token.ts`.
+
+Before applying any fix the sub-agent identifies, rewrite any absolute path it returns to the
+active worktree root (`git rev-parse --show-toplevel`). An edit targeting the wrong absolute path
+silently lands in the wrong checkout in multi-worktree setups.
 
 Wait for the subagent to return its findings before proceeding.
 
@@ -141,6 +161,13 @@ you fix code **or**
 after you decide not to change behavior, post the reply **first**, then resolve (on repos that use
 resolved threads as a merge gate). Declining a suggestion is fine when explained — the reply is
 still required.
+
+**Confirm each reviewer concern against ground truth before coding.** A review comment is a
+hypothesis — the reviewer read the diff without full runtime context. Before writing any fix,
+locate the exact line or behavior in the live code or build output that confirms the concern is
+real. Read the existing implementation first; additive changes (new config, new wiring) often
+collide with code that already handles the case. One read-and-verify step before each fix
+prevents rework from coding against a misread root cause.
 
 For each piece of actionable feedback (from the subagent review, human reviewers, or the automatic
 review agent):
