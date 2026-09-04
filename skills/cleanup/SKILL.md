@@ -7,7 +7,7 @@ disable-model-invocation: true
 # Cleanup
 
 Clean up the current repository after finishing a task. Prunes stale branches, checks for
-uncommitted or unpushed work, and checks for unfinalized session memories.
+uncommitted or unpushed work.
 
 **Multi-agent safety:** Multiple agents may be running in parallel via worktrees. This skill only
 cleans up resources belonging to the **current session** and never touches branches or worktrees
@@ -178,67 +178,7 @@ gh pr create --title "docs: rescue stash content (stash@{n})" \
   --body "Rescues intentionally retained stash content after stale/regressive triage."
 ```
 
-### 4. Check for orphaned session memories on stale branches
-
-Before deleting branches, check if any contain session memory files that never made it to main.
-This prevents losing session memories that were committed to worktree branches but not included
-in the merged PR.
-
-```sh
-repo_root=$(git rev-parse --show-toplevel)
-default=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-[ -z "$default" ] && default="main"
-```
-
-For each branch that is a candidate for deletion (from step 2), check for branch-unique orphaned
-session memories:
-
-```sh
-unique_commits=$(git rev-list --count "origin/$default..<branch>")
-if [ "$unique_commits" -eq 0 ]; then
-  orphaned=""
-else
-  orphaned=$(git diff --name-only --diff-filter=ACMR "origin/$default" "<branch>" -- docs/agent-sessions/ 2>/dev/null)
-fi
-```
-
-If orphaned session memories are found on a branch about to be deleted:
-
-1. **WARN** the user: "Branch `<branch>` has session memory files not present on `$default`:
-   `<list of files>`. These will be lost if the branch is deleted."
-
-2. **Offer to rescue** them by cherry-picking to a rescue branch:
-   ```sh
-   USERNAME=$(gh api user --jq .login 2>/dev/null || echo "agent")
-   rescue_branch="${USERNAME}/rescue-session-memory-$(date +%Y%m%d-%H%M%S)"
-   git switch -c "$rescue_branch" "origin/$default"
-   printf '%s\n' "$orphaned" | while read -r file; do
-     [ -n "$file" ] && git checkout <branch> -- "$file"
-   done
-   printf '%s\n' "$orphaned" | while read -r file; do
-     [ -n "$file" ] && git add -- "$file"
-   done
-   git commit -m "docs: rescue stranded session memories from branch <branch>"
-   git push -u origin HEAD
-   gh pr create --title "docs: rescue stranded session memories" \
-     --body "Rescues session memory files that were stranded on branch \`<branch>\` after its PR merged."
-   ```
-
-3. Only proceed with branch deletion after session memories are rescued or the user explicitly
-   confirms they can be discarded.
-
-### 5. Finalize session memory (if applicable)
-
-Check whether a session memory directory exists for the current session and today's date:
-
-```sh
-ls -d "$(git rev-parse --show-toplevel)/docs/agent-sessions/$(date +%Y-%m-%d)-"*/ 2>/dev/null
-```
-
-If a session directory exists and has not been finalized (contains HTML comment placeholders in
-`memory.md`), remind the user to run `/session-memory finalize` before cleaning up.
-
-### 6. Print summary
+### 4. Print summary
 
 Display:
 
@@ -251,6 +191,6 @@ Display:
 - **Branch freshness** — how many commits behind `origin/<default>` the current branch is. If > 0,
   suggest rebasing before the next task:
   `git fetch origin && git rebase origin/<default>`
-- **Warnings** — any uncommitted changes, unpushed commits, or unfinalized session memories (this
+- **Warnings** — any uncommitted changes, unpushed commits, (this
   section only appears if there are warnings). Include stale/regressive stash triage results here.
 - **Status** — "ready for next task"

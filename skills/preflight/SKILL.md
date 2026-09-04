@@ -130,10 +130,10 @@ if [ -n "$worktree_name" ]; then
 fi
 ```
 
-If `active_count` is 2 or more (the current session has its own transcript, so 2+ means another
+If `active_count` is 2 or more (the current session has its own file, so 2+ means another
 session is also active):
 
-- **FAIL** — "Worktree `<name>` has an active session (multiple transcripts modified within 5
+- **FAIL** — "Worktree `<name>` has an active session (multiple recent session files
   minutes). Another agent is likely working here — dispatch to a different worktree."
 
 If not in a worktree context, skip this check.

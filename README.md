@@ -5,7 +5,7 @@
 # Skills
 
 > Reusable [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and Codex skills for autonomous
-> development workflows — issue triage, PR shepherding, session memory, and more.
+> development workflows — issue triage, PR shepherding, and more.
 >
 > _From the wildflower meadows of Colorado, with love._
 
@@ -75,11 +75,9 @@ pull the repo and you're up to date. No reinstall needed.
 |-------|---------|-------------|
 | **Architecture Diagrams** | `/architecture-diagrams` | Builds an interactive, auto-laid-out architecture docs page (React Flow + ELK); portable to TanStack Start, Next.js, or any React app |
 | **AWS Cost Check** | `/aws-cost-check` | Audits your AWS account for runaway costs, forgotten resources, and free tier overages |
-| **Cleanup** | `/cleanup` | Prunes stale branches, checks for uncommitted work, reminds about session memories |
+| **Cleanup** | `/cleanup` | Prunes stale branches, checks for uncommitted work, cleans up after a merged PR |
 | **Pick Up Issue** | `/pick-up-issue` | Finds an unassigned issue, claims it, implements a fix, opens a PR, and shepherds it to merge |
 | **Preflight** | `/preflight` | Validates repo identity, branch state, CI health, and open PRs before you start work |
-| **Recall** | `/recall` | Loads relevant prior context from layered session memory and archived transcripts before implementation |
-| **Session Memory** | `/session-memory` | Maintains layered memory (session artifact, daily log, durable memory) so future sessions can reuse decisions reliably |
 | **Shepherd to Merge** | `/shepherd-to-merge` | Single-PR or sequential queue mode: reviews, fixes feedback, rebases, and auto-merges |
 | **Status** | `/status` | One-shot dashboard for open PRs/issues with stuck PR detection |
 
@@ -95,9 +93,6 @@ graph LR
     S --> C[🌲 /cleanup]
     C -.-> P
 ```
-
-`/recall` should run before implementation to load prior context; `/session-memory` runs during and
-after implementation to persist new context so future sessions can reuse it.
 
 `/status` is an operational check-in skill you can run anytime between lifecycle steps.
 
@@ -162,8 +157,6 @@ Cairns marking where others have stumbled:
 | CI won't trigger | Stale workflow YAML on branch | Rebase onto latest main |
 | Worktree branch conflict | Tried to switch to `main` | Use `claude/<worktree-name>` or `codex/<worktree-name>` instead |
 | Cache misses after runner change | Mixed cache actions | Use repo's standard cache action consistently |
-| Repeated work | Didn't check prior sessions | Run `/recall` and read relevant layered memory + transcript hits before implementing |
-| Stranded session memories | Memory committed to worktree branch, not in PR | Finalize memory before shepherding; `/cleanup` checks for orphans |
 
 ## CLAUDE.md Integration
 

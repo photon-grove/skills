@@ -53,9 +53,9 @@ perform these checks before proceeding:
 
 1. **Detect worktree name:** Extract `<name>` from the path.
 
-2. **Check for active sessions:** Count JSONL transcript files modified in the last 5 minutes for
-   this worktree. The current session will have its own transcript, so only flag a conflict when
-   **2 or more** recent transcripts exist (indicating another session is also active):
+2. **Check for active sessions:** Count harness session files modified in the last 5 minutes for
+   this worktree. The current session has its own file, so only flag a conflict when **2 or more**
+   recent session files exist (indicating another session is also active):
 
    ```sh
    runtime=$(echo "$PWD" | sed -n 's|.*/\.\(claude\|codex\)/worktrees/.*|\1|p')
@@ -73,7 +73,7 @@ perform these checks before proceeding:
    ```
 
    If `active_count` is 2 or more, **STOP with error**: "Worktree `<name>` has an active session
-   (multiple transcripts modified within 5 minutes). Refusing to dispatch — wait for the session
+   (multiple recent session files). Refusing to dispatch — wait for the session
    to finish or use a different worktree."
 
 3. **Record current branch:** The cleanup skill will independently return to
@@ -221,36 +221,18 @@ This creates the branch from the remote ref without needing to check out the def
 For the issue slug, derive a short kebab-case name from the issue title (e.g., issue #42 "Fix login
 timeout" becomes `fix-login-timeout`). Keep it under 50 characters.
 
-### 5. Start session memory (if available)
-
-If the repo has a `docs/agent-sessions/` directory, run:
-
-```
-/session-memory start
-```
-
-Update `memory.md` with the issue reference and goal throughout the implementation.
-
-### 5.5. Check for prior context
+### 4.5. Check for prior context
 
 Before implementing, check whether past sessions touched related code. This prevents re-discovering
 solutions or repeating failed approaches.
 
-1. **Run `/recall`** to gather prior context from layered memory and archived transcripts:
-   ```
-   /recall <owner>/<repo> <issue-keyword>
-   ```
-   Review the returned decisions, pitfalls, and follow-ups before writing code.
+1. **Search project memory** for the issue topic (via the repo's memory tooling — see its
+   `AGENTS.md` for the exact commands). Review returned decisions, pitfalls, and follow-ups before
+   writing code.
+2. **Fallback:** `git log --oneline -- <related paths>` and linked issues/PRs, so prior failed
+   approaches are not repeated.
 
-2. **Fallback (if `/recall` is unavailable):**
-   - Search `docs/agent-sessions/` for related `memory.md` files and read relevant ones.
-   - If `transcript-archive` is available, run:
-     ```sh
-     transcript-archive search --repo <owner>/<repo> --limit 5 --query "<issue-keyword>" 2>/dev/null
-     ```
-   Use findings to avoid repeating prior failed approaches.
-
-### 6. Implement the fix
+### 5. Implement the fix
 
 Read the issue body carefully. Understand the requirements, acceptance criteria, and any linked
 discussions or references.
@@ -305,7 +287,7 @@ git diff -- '**/package.json' '**/go.mod' '**/go.sum' pnpm-lock.yaml package-loc
 Revert any churn that is not directly required by the change (e.g., unrelated version bumps,
 whitespace diffs in lock files). Stage only the diffs that belong to the fix.
 
-### 7. Verify and push
+### 6. Verify and push
 
 Before pushing, confirm you're on the correct branch and it tracks the right remote:
 
@@ -342,7 +324,7 @@ Then push:
 git push -u origin HEAD
 ```
 
-### 8. Open a pull request
+### 7. Open a pull request
 
 Write a concise, link-heavy body — a reviewer should grasp **why** and **what** in under a minute
 and reach the evidence in one click. Prefer a precise link over prose ("show, don't tell"); defer
@@ -382,33 +364,7 @@ gh pr create -R <owner>/<repo> --title "<concise title>" --body-file "$body_file
 rm -f "$body_file"
 ```
 
-### 9. Finalize session memory before shepherding
-
-Before shepherding, ensure the session memory is finalized and included in the PR's commit chain.
-Session memories committed after the PR is created (or on a different branch) can get stranded when
-the PR squash-merges.
-
-**Land session artifacts on the first push.** The session memory commit must reach the remote
-before CI runs its presence-gate check. If you commit session memory after the initial push, a
-CI presence-gate may already be failing — and you'll need an extra push round-trip to fix it.
-Commit and push session memory as part of the same push that opens the PR, not as a follow-up.
-
-If a session memory was started in step 5:
-
-1. Run `/session-memory finalize` to complete and stage the memory file.
-2. Commit the session memory to the **PR branch** (the current feature branch):
-   ```sh
-   git add docs/agent-sessions/
-   git commit -m "docs: finalize session memory for issue #<number>"
-   ```
-3. Push the commit so it's part of the PR:
-   ```sh
-   git push
-   ```
-
-This ensures the session memory is included in the squash-merge commit when the PR lands on main.
-
-### 10. Shepherd the PR to merge
+### 8. Shepherd the PR to merge
 
 Invoke the shepherd skill to handle review, feedback, CI, and merge:
 
@@ -422,7 +378,7 @@ not) before resolving threads; follow that workflow end to end.
 Wait for the shepherd process to complete. If it encounters issues it cannot resolve, surface them
 to the user.
 
-### 11. Confirm the issue is closed
+### 9. Confirm the issue is closed
 
 After the PR is merged, verify the issue was automatically closed:
 
@@ -436,7 +392,7 @@ If the state is not `CLOSED`, close it manually with a reference to the PR:
 gh issue close <number> -R <owner>/<repo> --comment "Resolved in #<pr-number>."
 ```
 
-### 12. Remove in-progress signals
+### 10. Remove in-progress signals
 
 If a `status:in-progress` label was added in step 2, remove it:
 
@@ -446,7 +402,7 @@ gh issue edit <number> -R <owner>/<repo> --remove-label "status:in-progress"
 
 If no status label was added, skip this step.
 
-### 13. Clean up
+### 11. Clean up
 
 Run the cleanup skill to prune branches and check for loose work. If running in a worktree,
 `/cleanup` will attempt to return to `claude/<worktree-name>` or `codex/<worktree-name>` instead
@@ -457,7 +413,7 @@ that branch does not exist or switching fails, it will skip changing branches.
 /cleanup
 ```
 
-### 14. Print summary
+### 12. Print summary
 
 Display:
 

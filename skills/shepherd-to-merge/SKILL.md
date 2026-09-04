@@ -446,168 +446,7 @@ Print a summary:
 If auto-merge could not be enabled (e.g., the repo doesn't support it), inform the user and suggest
 they merge manually once requirements are satisfied.
 
-### 14. Post-merge session memory rescue
-
-After the PR merges (or when auto-merge is enabled), check whether any session memories are stranded
-on the current branch but missing from the merged PR. Session memories committed to worktree branches
-often get lost when the PR squash-merges a different commit chain.
-
-```sh
-state=$(gh pr view <number> -R <owner>/<repo> --json state --jq .state)
-```
-
-If the state is `MERGED`:
-
-1. **Check for session memory files added on the local branch but absent from main:**
-   ```sh
-   repo_root=$(git rev-parse --show-toplevel)
-   default=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-   [ -z "$default" ] && default="main"
-   git fetch origin "$default"
-
-   # IMPORTANT: Use --diff-filter=A to only find files ADDED on this branch
-   # (absent from main). Without this filter, files that exist on both branches
-   # but differ (e.g. MEMORY.md) would be included, causing the rescue to
-   # overwrite main's newer version with the worktree's stale copy.
-   orphaned=$(git diff --name-only --diff-filter=A "origin/$default" HEAD -- docs/agent-sessions/ 2>/dev/null)
-   ```
-
-2. **If orphaned session memories are found**, rescue them by creating a cleanup PR:
-   ```sh
-   if [ -n "$orphaned" ]; then
-     # Save the current branch ref before switching
-     source_ref=$(git rev-parse HEAD)
-     USERNAME=$(gh api user --jq .login 2>/dev/null || echo "agent")
-     rescue_branch="${USERNAME}/rescue-session-memory-$(date +%Y%m%d-%H%M%S)"
-     git switch -c "$rescue_branch" "origin/$default"
-
-     # Checkout ONLY the added files (not the entire directory), to avoid
-     # overwriting main's version of shared files like MEMORY.md
-     echo "$orphaned" | while read -r f; do
-       git checkout "$source_ref" -- "$f"
-     done
-
-     git add docs/agent-sessions/
-
-     # Validate: the staged diff should contain only additions, never deletions
-     if git diff --cached --numstat | awk '{if ($2 > 0) exit 1}'; then
-       git commit -m "docs: rescue stranded session memory from merged PR #<number>
-
-   Why: Session memory was committed to a worktree branch that diverged from the
-   PR's commit chain. The PR merged via squash, leaving the memory stranded."
-       git push -u origin HEAD
-       gh pr create --title "docs: rescue session memory from PR #<number>" \
-         --body "Rescues session memory files that were stranded on a worktree branch after PR #<number> merged via squash."
-     else
-       echo "Warning: rescue diff contains deletions — aborting to avoid overwriting main."
-       git checkout -- .
-       git switch -
-       git branch -D "$rescue_branch"
-     fi
-   fi
-   ```
-
-   If the rescue PR creation fails, warn the user that session memories need manual rescue.
-
-### 15. Archive transcript
-
-After a successful merge, automatically archive the current session transcript so future agents can
-search and recall this session's context.
-
-**Prerequisites:** A repo-specific transcript archive command must exist (commonly
-`scripts/transcript-archive`). If archive tooling or credentials are missing, warn and skip this
-step rather than failing.
-
-Before running archive commands, check repo guidance (`AGENTS.md`/`CLAUDE.md`) for required
-environment prefixes (for example profile selection or endpoint overrides) and apply them.
-
-1. **Detect session ID and repo root:**
-   ```sh
-   repo_root=$(git rev-parse --show-toplevel)
-   ```
-
-   Detect the current session ID from runtime-specific sources:
-   - Prefer `CODEX_THREAD_ID` in Codex by matching `*${CODEX_THREAD_ID}*.jsonl` under
-     `~/.codex/sessions/` and `~/.codex/archived_sessions/`.
-   - Prefer `CLAUDE_SESSION_ID` in Claude Code by matching `*${CLAUDE_SESSION_ID}*.jsonl` under
-     `~/.claude/projects/`.
-   - If those env vars are unavailable, detect runtime from path (`.codex/worktrees` or
-     `.claude/worktrees`) and fall back to the most recent `.jsonl` for that runtime.
-   - If runtime cannot be inferred from env or path, scan both roots and use the most recent JSONL.
-   - Use the matched filename without `.jsonl` as `session_id`.
-   - If no JSONL is found, warn and skip archival (best-effort behavior).
-
-2. **Detect context for archive metadata:**
-   ```sh
-   current_branch=$(git branch --show-current)
-   worktree_name=$(echo "$PWD" | sed -n 's|.*/\.\(claude\|codex\)/worktrees/\([^/]*\)\(/.*\)\{0,1\}$|\2|p')
-   agent_name="${worktree_name:-shepherd}"
-   ```
-
-3. **Run the archive command:**
-   ```sh
-   runtime=""
-   session_id=""
-
-   if [ -n "${CODEX_THREAD_ID:-}" ]; then
-     runtime="codex"
-   elif [ -n "${CLAUDE_SESSION_ID:-}" ]; then
-     runtime="claude"
-   else
-     runtime=$(echo "$PWD" | sed -n 's|.*/\.\(claude\|codex\)/worktrees/.*|\1|p')
-   fi
-
-   if [ -n "${CODEX_THREAD_ID:-}" ]; then
-     codex_match=$(find "$HOME/.codex/sessions" "$HOME/.codex/archived_sessions" -type f \
-       -name "*${CODEX_THREAD_ID}*.jsonl" 2>/dev/null | head -1)
-     [ -n "$codex_match" ] && session_id=$(basename "$codex_match" .jsonl)
-   fi
-
-   if [ -z "$session_id" ] && [ -n "${CLAUDE_SESSION_ID:-}" ]; then
-     claude_match=$(find "$HOME/.claude/projects" -type f -name "*${CLAUDE_SESSION_ID}*.jsonl" 2>/dev/null | head -1)
-     [ -n "$claude_match" ] && session_id=$(basename "$claude_match" .jsonl)
-   fi
-
-   if [ -z "$session_id" ]; then
-     if [ "$runtime" = "codex" ]; then
-       latest=$(find "$HOME/.codex/sessions" "$HOME/.codex/archived_sessions" -type f -name "*.jsonl" 2>/dev/null | sort | tail -1)
-     elif [ "$runtime" = "claude" ]; then
-       latest=$(find "$HOME/.claude/projects" -type f -name "*.jsonl" 2>/dev/null | sort | tail -1)
-     else
-       latest=$(
-         find "$HOME/.codex/sessions" "$HOME/.codex/archived_sessions" "$HOME/.claude/projects" \
-           -type f -name "*.jsonl" 2>/dev/null | sort | tail -1
-       )
-     fi
-     [ -n "$latest" ] && session_id=$(basename "$latest" .jsonl)
-   fi
-
-   if [ -z "$session_id" ]; then
-     echo "Warning: no session JSONL found for current runtime — skipping transcript archival."
-   else
-   ${TRANSCRIPT_ARCHIVE_PREFIX:+${TRANSCRIPT_ARCHIVE_PREFIX} }go run "${repo_root}/scripts/transcript-archive" archive \
-     --session "$session_id" \
-     --agent "$agent_name" \
-     --repo <owner>/<repo> \
-     --branch "$current_branch" \
-     --pr <number> \
-     --summary "Shepherded PR #<number>: <pr-title>"
-   fi
-   ```
-
-   `TRANSCRIPT_ARCHIVE_PREFIX` is optional and lets repos inject required env vars (for example,
-   an AWS profile) without hardcoding private account details in this skill. Do not include a
-   trailing space in the value; the command above adds spacing automatically when it is set.
-
-   If the `scripts/transcript-archive` directory does not exist, skip with a warning:
-   ```
-   Warning: transcript-archive CLI not found — skipping transcript archival.
-   ```
-
-   If the archive command fails (e.g., AWS credentials expired), warn the user but do not treat it
-   as a blocking error. The PR is already merged; transcript archiving is best-effort.
-
-### 16. Post-merge cleanup (standalone only)
+### 14. Post-merge cleanup (standalone only)
 
 When `/shepherd-to-merge` is invoked standalone (not as part of `/pick-up-issue`), clean up the local
 branch after the PR merges. If the PR is still pending auto-merge, skip this step.
@@ -632,7 +471,7 @@ If the state is `MERGED`:
    git branch -D <pr-branch>
    ```
 
-### 17. Rebase remaining queue entries (sequential mode only)
+### 15. Rebase remaining queue entries (sequential mode only)
 
 When `mode=sequential` and at least one PR remains in `processing_queue`, update each remaining PR
 branch onto its own latest base branch before processing the next PR.
@@ -686,7 +525,7 @@ branch onto its own latest base branch before processing the next PR.
 
 Do not auto-resolve ambiguous conflicts.
 
-### 18. Final queue report (sequential mode only)
+### 16. Final queue report (sequential mode only)
 
 After the queue is exhausted (or processing stops early), print:
 
