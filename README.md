@@ -75,7 +75,7 @@ pull the repo and you're up to date. No reinstall needed.
 |-------|---------|-------------|
 | **Architecture Diagrams** | `/architecture-diagrams` | Builds an interactive, auto-laid-out architecture docs page (React Flow + ELK); portable to TanStack Start, Next.js, or any React app |
 | **AWS Cost Check** | `/aws-cost-check` | Audits your AWS account for runaway costs, forgotten resources, and free tier overages |
-| **Cleanup** | `/cleanup` | Prunes stale branches, checks for uncommitted work, cleans up after a merged PR |
+| **Cleanup** | `/cleanup` | Prunes stale branches, triages stashes, and checks for uncommitted or unpushed work after finishing a task |
 | **Pick Up Issue** | `/pick-up-issue` | Finds an unassigned issue, claims it, implements a fix, opens a PR, and shepherds it to merge |
 | **Preflight** | `/preflight` | Validates repo identity, branch state, CI health, and open PRs before you start work |
 | **Shepherd to Merge** | `/shepherd-to-merge` | Single-PR or sequential queue mode: reviews, fixes feedback, rebases, and auto-merges |
@@ -102,6 +102,10 @@ Run `./setup.sh` (or `./setup.ps1` on Windows) to refresh installed skills and g
 index at:
 
 - `~/.claude/skills/INDEX.md`
+
+When a skill is removed upstream, re-run `setup.sh` and delete its installed
+directory (for example `rm -r ~/.claude/skills/<name>`), or the stale symlink
+and INDEX entry remain.
 - `~/.codex/skills/INDEX.md`
 
 This keeps a stable, single-file inventory of installed skills so command discovery is consistent

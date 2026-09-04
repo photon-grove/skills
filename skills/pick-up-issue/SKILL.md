@@ -53,9 +53,9 @@ perform these checks before proceeding:
 
 1. **Detect worktree name:** Extract `<name>` from the path.
 
-2. **Check for active sessions:** Count harness session files modified in the last 5 minutes for
+2. **Check for active sessions:** Count session `.jsonl` files modified in the last 5 minutes for
    this worktree. The current session has its own file, so only flag a conflict when **2 or more**
-   recent session files exist (indicating another session is also active):
+   recent session `.jsonl` files exist (indicating another session is also active):
 
    ```sh
    runtime=$(echo "$PWD" | sed -n 's|.*/\.\(claude\|codex\)/worktrees/.*|\1|p')
@@ -73,7 +73,7 @@ perform these checks before proceeding:
    ```
 
    If `active_count` is 2 or more, **STOP with error**: "Worktree `<name>` has an active session
-   (multiple recent session files). Refusing to dispatch — wait for the session
+   (multiple recent session `.jsonl` files). Refusing to dispatch — wait for the session
    to finish or use a different worktree."
 
 3. **Record current branch:** The cleanup skill will independently return to

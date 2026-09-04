@@ -1,6 +1,6 @@
 ---
 name: cleanup
-description: Clean up the current repo — prune branches, check for uncommitted work, finalize sessions
+description: Clean up the current repo — prune branches, triage stashes, check for uncommitted or unpushed work
 disable-model-invocation: true
 ---
 
@@ -191,6 +191,6 @@ Display:
 - **Branch freshness** — how many commits behind `origin/<default>` the current branch is. If > 0,
   suggest rebasing before the next task:
   `git fetch origin && git rebase origin/<default>`
-- **Warnings** — any uncommitted changes, unpushed commits, (this
-  section only appears if there are warnings). Include stale/regressive stash triage results here.
+- **Warnings** — any uncommitted changes or unpushed commits (this section only appears if
+  there are warnings). Include stale/regressive stash triage results here.
 - **Status** — "ready for next task"

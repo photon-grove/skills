@@ -92,7 +92,7 @@ context for the operator.
 
 ### 3. Process queue one PR at a time
 
-For each PR in `processing_queue`, run steps 4-18 completely before moving to the next PR. Never shepherd
+For each PR in `processing_queue`, run steps 4-16 completely before moving to the next PR. Never shepherd
 multiple PRs concurrently from this skill.
 
 After each PR reaches `MERGED`, print a one-line progress update:
@@ -450,6 +450,10 @@ they merge manually once requirements are satisfied.
 
 When `/shepherd-to-merge` is invoked standalone (not as part of `/pick-up-issue`), clean up the local
 branch after the PR merges. If the PR is still pending auto-merge, skip this step.
+
+```sh
+state=$(gh pr view <number> -R <owner>/<repo> --json state --jq .state)
+```
 
 If the state is `MERGED`:
 
