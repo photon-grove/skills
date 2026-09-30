@@ -180,7 +180,7 @@ Leave a comment so others know the issue is being worked on:
 gh issue comment <number> -R <owner>/<repo> --body "Picking this up — working on a fix now."
 ```
 
-### 3. Preflight validation
+### 3. Verify repository and CI
 
 Before writing any code, verify the environment is correct. Wrong repo/branch targeting is the #1
 source of wasted work.

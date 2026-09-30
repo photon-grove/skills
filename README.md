@@ -80,7 +80,6 @@ PowerShell installers (`setup.ps1`, `install-skill.ps1`) currently target `~/.cl
 | **Cleanup** | `/cleanup` | Prunes stale branches, triages stashes, and checks for uncommitted or unpushed work after finishing a task |
 | **Optimize Tests** | `/optimize-tests` | Audits, removes, consolidates, and rewrites tests for higher confidence per maintenance cost |
 | **Pick Up Issue** | `/pick-up-issue` | Finds an unassigned issue, claims it, implements a fix, opens a PR, and shepherds it to merge |
-| **Preflight** | `/preflight` | Validates repo identity, branch state, CI health, and open PRs before you start work |
 | **Shepherd to Merge** | `/shepherd-to-merge` | Single-PR or sequential queue mode: reviews, fixes feedback, rebases, and auto-merges |
 | **Status** | `/status` | One-shot dashboard for open PRs/issues with stuck PR detection |
 | **Unslop** | `/unslop` | Detects and rewrites generic, overly polished, or AI-sounding prose while preserving meaning |
@@ -92,10 +91,9 @@ switchbacks up a fourteener:
 
 ```mermaid
 graph LR
-    P[🏔️ /preflight] --> I[🥾 /pick-up-issue]
-    I --> S[⛰️ /shepherd-to-merge]
+    I[🥾 /pick-up-issue] --> S[⛰️ /shepherd-to-merge]
     S --> C[🌲 /cleanup]
-    C -.-> P
+    C -.-> I
 ```
 
 `/status` is an operational check-in skill you can run anytime between lifecycle steps.
@@ -176,8 +174,8 @@ Skills are generic — they work across repos. For repo-specific behavior, add c
 - **Branch conventions** — naming patterns, protected branches
 - **Verification commands** — test/lint/build commands for the project's toolchain
 
-Skills like `/preflight` read `AGENTS.md`/`CLAUDE.md` to validate architecture constraints, so keeping those files
-accurate directly reduces agent mistakes.
+Implementation skills read `AGENTS.md`/`CLAUDE.md` for repository constraints. Keep those files
+accurate to reduce wrong-repo edits and incorrect verification commands.
 
 ## License
 
