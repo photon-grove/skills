@@ -5,7 +5,7 @@
 # Skills
 
 > Reusable [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and Codex skills for autonomous
-> development workflows — issue triage, PR shepherding, and more.
+> development workflows — PR shepherding, dashboard maintenance, and more.
 >
 > _From the wildflower meadows of Colorado, with love._
 
@@ -22,8 +22,8 @@ parallel via `git worktree`, each on its own branch, blazing its own trail to th
 ### Linux / macOS
 
 ```sh
-git clone git@github.com:bkonkle-dev/skills.git ~/code/bkonkle/skills
-cd ~/code/bkonkle/skills
+git clone git@github.com:photon-grove/skills.git ~/code/photon-grove/skills
+cd ~/code/photon-grove/skills
 ./setup.sh
 ```
 
@@ -38,8 +38,8 @@ To install a single skill:
 **Git Bash (recommended)** — works without elevated privileges:
 
 ```sh
-git clone git@github.com:bkonkle-dev/skills.git ~/code/bkonkle/skills
-cd ~/code/bkonkle/skills
+git clone git@github.com:photon-grove/skills.git ~/code/photon-grove/skills
+cd ~/code/photon-grove/skills
 bash setup.sh
 ```
 
@@ -52,8 +52,8 @@ bash install-skill.sh <skill-name>
 **PowerShell** — requires Developer Mode (Settings > For developers) or an elevated (admin) prompt:
 
 ```powershell
-git clone git@github.com:bkonkle-dev/skills.git ~\code\bkonkle\skills
-cd ~\code\bkonkle\skills
+git clone git@github.com:photon-grove/skills.git ~\code\photon-grove\skills
+cd ~\code\photon-grove\skills
 .\setup.ps1
 ```
 
@@ -75,28 +75,78 @@ PowerShell installers (`setup.ps1`, `install-skill.ps1`) currently target `~/.cl
 
 | Skill | Command | What it does |
 |-------|---------|-------------|
-| **Architecture Diagrams** | `/architecture-diagrams` | Builds an interactive, auto-laid-out architecture docs page (React Flow + ELK); portable to TanStack Start, Next.js, or any React app |
-| **AWS Cost Check** | `/aws-cost-check` | Audits your AWS account for runaway costs, forgotten resources, and free tier overages |
-| **Cleanup** | `/cleanup` | Prunes stale branches, triages stashes, and checks for uncommitted or unpushed work after finishing a task |
+| **AWS Cost Check** | `/aws-cost-check` | Discovers AWS resources, attributes spend, and flags runaway costs, errors, and anomalies |
+| **Dashboard** | `/dashboard` | Updates a Notion follow-ups tracker and dashboard using machine-local configuration |
 | **Optimize Tests** | `/optimize-tests` | Audits, removes, consolidates, and rewrites tests for higher confidence per maintenance cost |
-| **Pick Up Issue** | `/pick-up-issue` | Finds an unassigned issue, claims it, implements a fix, opens a PR, and shepherds it to merge |
+| **PR Description** | `/pr-description` | Writes concise PR bodies with commit-pinned evidence links |
 | **Shepherd to Merge** | `/shepherd-to-merge` | Single-PR or sequential queue mode: reviews, fixes feedback, rebases, and auto-merges |
-| **Status** | `/status` | One-shot dashboard for open PRs/issues with stuck PR detection |
 | **Unslop** | `/unslop` | Detects and rewrites generic, overly polished, or AI-sounding prose while preserving meaning |
 
-### Lifecycle
+### Dashboard configuration
 
-These skills aren't standalone — they compose into a full development lifecycle, like
-switchbacks up a fourteener:
+The `dashboard` skill requires an authenticated Notion MCP server at
+`https://mcp.notion.com/mcp`. The skill installers do **not** register MCP servers.
+Before invoking it, add the server to each client you use and complete Notion OAuth:
 
-```mermaid
-graph LR
-    I[🥾 /pick-up-issue] --> S[⛰️ /shepherd-to-merge]
-    S --> C[🌲 /cleanup]
-    C -.-> I
+- **Claude Code:** run `claude mcp add --transport http --scope user notion https://mcp.notion.com/mcp`,
+  then open `/mcp` in Claude Code and authenticate the `notion` server.
+- **Codex:** run `codex mcp add notion --url https://mcp.notion.com/mcp`, then
+  `codex mcp login notion`.
+- **OpenCode:** run `opencode mcp add notion --url https://mcp.notion.com/mcp`, then
+  `opencode mcp auth notion`.
+- **Pi:** use an HTTP/OAuth-capable MCP extension, such as `pi-mcp-adapter`.
+  Use its `mcp` gateway's `install` action with `url: "https://mcp.notion.com/mcp"`,
+  then complete the OAuth prompt.
+
+Authorize access to the dashboard and tracker. Reconnect or restart the client if
+needed, then verify the Notion tools can fetch both before attempting updates.
+Do not put OAuth tokens in the dashboard configuration or this repository.
+
+Keep workspace-specific settings in `~/.dashboard.json`, outside this repository.
+Do not overwrite an existing configuration.
+
+**Linux / macOS / Git Bash:**
+
+```sh
+cp -n skills/dashboard/dashboard.example.json ~/.dashboard.json
+chmod 600 ~/.dashboard.json
 ```
 
-`/status` is an operational check-in skill you can run anytime between lifecycle steps.
+**PowerShell:**
+
+```powershell
+$configPath = Join-Path $HOME '.dashboard.json'
+if (-not (Test-Path $configPath)) {
+    Copy-Item skills/dashboard/dashboard.example.json $configPath
+}
+```
+
+On Windows, use the file's Properties → Security settings to restrict access to
+your account and required system administrators. `chmod` is not available in
+PowerShell.
+
+Replace the example's `dashboard_url` with your Notion dashboard URL. Optionally set
+`tracker_data_source_url` to the tracker's `collection://...` URL and list exact project
+names in `excluded_projects`. Otherwise the skill discovers the tracker from the page
+and follows its maintenance conventions. If several trackers exist, it asks you to
+choose rather than guessing. Each machine can point to a different dashboard.
+
+The skill preserves embedded databases and maintenance conventions, updates tracker
+rows before dashboard summaries, and checks live evidence before marking work done.
+See [`skills/dashboard/SKILL.md`](skills/dashboard/SKILL.md) for the layout and schema.
+It does not automatically create a Notion dashboard. A differently named local
+dashboard skill is left in place for a later migration.
+
+**Existing skill named `dashboard`:** before running either installer, move any
+local `dashboard` directory and its `dashboard.bak` copies to a backup directory
+outside all skill roots, such as `~/.local/share/skill-backups/`. Check each root
+you use: `~/.claude/skills/`, `~/.codex/skills/`, `~/.pi/agent/skills/`, and
+`~/.config/opencode/skills/`. Existing symlinks to this repo can stay. The installers
+otherwise replace a same-named local directory with a repo symlink and leave a
+`.bak` directory inside the discovery path, which can expose two skills with the
+same frontmatter name. Archive first, configure `~/.dashboard.json`, then install
+the public skill. Do not remove a differently named local skill until you have
+verified the new workflow.
 
 ## Skill Discoverability
 
@@ -108,7 +158,9 @@ index at:
 
 When a skill is removed upstream, re-run `setup.sh`: stale symlinks pointing into this repo are
 removed automatically and the INDEX files are regenerated. Real (non-symlink) copies must be
-removed manually, for example `rm -r ~/.claude/skills/<name>`.
+removed manually, for example `rm -r ~/.claude/skills/<name>`. Check backup directories
+and synced copies too: a directory ending in `.bak` can still contain a discoverable
+`SKILL.md`. Cloud-managed copies may return until removed from their source.
 
 This keeps a stable, single-file inventory of installed skills so command discovery is consistent
 across sessions.
@@ -122,7 +174,7 @@ across sessions.
 ## Updating
 
 ```sh
-cd ~/code/bkonkle/skills && git pull
+cd ~/code/photon-grove/skills && git pull
 ```
 
 Since skills are symlinked, existing ones update automatically. Run `./setup.sh` (or `.\setup.ps1`

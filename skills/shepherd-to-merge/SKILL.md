@@ -446,10 +446,9 @@ Print a summary:
 If auto-merge could not be enabled (e.g., the repo doesn't support it), inform the user and suggest
 they merge manually once requirements are satisfied.
 
-### 14. Post-merge cleanup (standalone only)
+### 14. Post-merge cleanup
 
-When `/shepherd-to-merge` is invoked standalone (not as part of `/pick-up-issue`), clean up the local
-branch after the PR merges. If the PR is still pending auto-merge, skip this step.
+Clean up the local branch after the PR merges. If the PR is still pending auto-merge, skip this step.
 
 ```sh
 state=$(gh pr view <number> -R <owner>/<repo> --json state --jq .state)

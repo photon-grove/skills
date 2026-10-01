@@ -10,7 +10,7 @@
 .PARAMETER SkillName
     Name of the skill directory under skills/ to install.
 .EXAMPLE
-    .\install-skill.ps1 pick-up-issue
+    .\install-skill.ps1 pr-description
 #>
 
 param(
