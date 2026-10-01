@@ -85,12 +85,28 @@ PowerShell installers (`setup.ps1`, `install-skill.ps1`) currently target `~/.cl
 ### Dashboard configuration
 
 The `dashboard` skill uses the Notion MCP server at `https://mcp.notion.com/mcp`.
-Keep workspace-specific settings in `~/.dashboard.json`, outside this repository:
+Keep workspace-specific settings in `~/.dashboard.json`, outside this repository.
+Do not overwrite an existing configuration.
+
+**Linux / macOS / Git Bash:**
 
 ```sh
 cp -n skills/dashboard/dashboard.example.json ~/.dashboard.json
 chmod 600 ~/.dashboard.json
 ```
+
+**PowerShell:**
+
+```powershell
+$configPath = Join-Path $HOME '.dashboard.json'
+if (-not (Test-Path $configPath)) {
+    Copy-Item skills/dashboard/dashboard.example.json $configPath
+}
+```
+
+On Windows, use the file's Properties → Security settings to restrict access to
+your account and required system administrators. `chmod` is not available in
+PowerShell.
 
 Replace the example's `dashboard_url` with your Notion dashboard URL. Optionally set
 `tracker_data_source_url` to the tracker's `collection://...` URL and list exact project
@@ -101,7 +117,19 @@ choose rather than guessing. Each machine can point to a different dashboard.
 The skill preserves embedded databases and maintenance conventions, updates tracker
 rows before dashboard summaries, and checks live evidence before marking work done.
 See [`skills/dashboard/SKILL.md`](skills/dashboard/SKILL.md) for the layout and schema.
-It does not automatically create a dashboard or migrate an existing local skill.
+It does not automatically create a Notion dashboard. A differently named local
+dashboard skill is left in place for a later migration.
+
+**Existing skill named `dashboard`:** before running either installer, move any
+local `dashboard` directory and its `dashboard.bak` copies to a backup directory
+outside all skill roots, such as `~/.local/share/skill-backups/`. Check each root
+you use: `~/.claude/skills/`, `~/.codex/skills/`, `~/.pi/agent/skills/`, and
+`~/.config/opencode/skills/`. Existing symlinks to this repo can stay. The installers
+otherwise replace a same-named local directory with a repo symlink and leave a
+`.bak` directory inside the discovery path, which can expose two skills with the
+same frontmatter name. Archive first, configure `~/.dashboard.json`, then install
+the public skill. Do not remove a differently named local skill until you have
+verified the new workflow.
 
 ## Skill Discoverability
 
