@@ -10,7 +10,12 @@ and link concrete evidence instead of narrating the diff.
 
 ## Structure
 
-Use two short sections:
+Read the target repository's `AGENTS.md`, `CLAUDE.md`, contribution guide, PR
+template, and existing PR body before writing. Preserve required sections,
+checklists, and metadata. Repository requirements take precedence over this
+skill's default layout.
+
+When no stronger template applies, use two short sections:
 
 ```markdown
 ## Summary
@@ -20,8 +25,9 @@ Use two short sections:
 <What changed and its scope or safety in one or two sentences.>
 ```
 
-Add a final line only for a related PR, scope caveat, or follow-up that earns
-its place.
+Add a final line for an applicable issue-closing directive, related PR, scope
+caveat, or follow-up. Use `Closes #<issue-number>` (or a repo-qualified reference)
+when the PR actually resolves that issue. Do not claim closure for partial work.
 
 ## Links
 
@@ -40,6 +46,12 @@ its place.
 
 ## Process
 
-Before writing, resolve `git rev-parse HEAD` and the line ranges for linked
-code. Refresh pinned links after pushing more commits. Use `gh ... --body-file`
-for multiline Markdown.
+For an existing PR, resolve its actual head commit and head repository with
+`gh pr view <target> -R <owner/repo> --json headRefOid,headRepository`. Verify the
+local checkout matches that commit before reading line ranges, or inspect the
+remote tree at that commit. Link to the head repository, including for fork PRs.
+Do not assume local `git rev-parse HEAD` belongs to the PR.
+
+For a new PR, verify the intended repository and branch, push its commits, then
+use that pushed head and its line ranges. Refresh pinned links after each push.
+Use `gh ... --body-file` for multiline Markdown.

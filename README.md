@@ -84,7 +84,24 @@ PowerShell installers (`setup.ps1`, `install-skill.ps1`) currently target `~/.cl
 
 ### Dashboard configuration
 
-The `dashboard` skill uses the Notion MCP server at `https://mcp.notion.com/mcp`.
+The `dashboard` skill requires an authenticated Notion MCP server at
+`https://mcp.notion.com/mcp`. The skill installers do **not** register MCP servers.
+Before invoking it, add the server to each client you use and complete Notion OAuth:
+
+- **Claude Code:** run `claude mcp add --transport http --scope user notion https://mcp.notion.com/mcp`,
+  then open `/mcp` in Claude Code and authenticate the `notion` server.
+- **Codex:** run `codex mcp add notion --url https://mcp.notion.com/mcp`, then
+  `codex mcp login notion`.
+- **OpenCode:** run `opencode mcp add notion --url https://mcp.notion.com/mcp`, then
+  `opencode mcp auth notion`.
+- **Pi:** use an HTTP/OAuth-capable MCP extension, such as `pi-mcp-adapter`.
+  Use its `mcp` gateway's `install` action with `url: "https://mcp.notion.com/mcp"`,
+  then complete the OAuth prompt.
+
+Authorize access to the dashboard and tracker. Reconnect or restart the client if
+needed, then verify the Notion tools can fetch both before attempting updates.
+Do not put OAuth tokens in the dashboard configuration or this repository.
+
 Keep workspace-specific settings in `~/.dashboard.json`, outside this repository.
 Do not overwrite an existing configuration.
 
