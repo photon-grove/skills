@@ -5,7 +5,7 @@
 # Skills
 
 > Reusable [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and Codex skills for autonomous
-> development workflows — PR shepherding, dashboard maintenance, and more.
+> development workflows — PR shepherding, test cleanup, and more.
 >
 > _From the wildflower meadows of Colorado, with love._
 
@@ -76,77 +76,10 @@ PowerShell installers (`setup.ps1`, `install-skill.ps1`) currently target `~/.cl
 | Skill | Command | What it does |
 |-------|---------|-------------|
 | **AWS Cost Check** | `/aws-cost-check` | Discovers AWS resources, attributes spend, and flags runaway costs, errors, and anomalies |
-| **Dashboard** | `/dashboard` | Updates a Notion follow-ups tracker and dashboard using machine-local configuration |
 | **Optimize Tests** | `/optimize-tests` | Audits, removes, consolidates, and rewrites tests for higher confidence per maintenance cost |
 | **PR Description** | `/pr-description` | Writes concise PR bodies with commit-pinned evidence links |
 | **Shepherd to Merge** | `/shepherd-to-merge` | Single-PR or sequential queue mode: reviews, fixes feedback, rebases, and auto-merges |
 | **Unslop** | `/unslop` | Detects and rewrites generic, overly polished, or AI-sounding prose while preserving meaning |
-
-### Dashboard configuration
-
-The `dashboard` skill requires an authenticated Notion MCP server at
-`https://mcp.notion.com/mcp`. The skill installers do **not** register MCP servers.
-Before invoking it, add the server to each client you use and complete Notion OAuth:
-
-- **Claude Code:** run `claude mcp add --transport http --scope user notion https://mcp.notion.com/mcp`,
-  then open `/mcp` in Claude Code and authenticate the `notion` server.
-- **Codex:** run `codex mcp add notion --url https://mcp.notion.com/mcp`, then
-  `codex mcp login notion`.
-- **OpenCode:** run `opencode mcp add notion --url https://mcp.notion.com/mcp`, then
-  `opencode mcp auth notion`.
-- **Pi:** use an HTTP/OAuth-capable MCP extension, such as `pi-mcp-adapter`.
-  Use its `mcp` gateway's `install` action with `url: "https://mcp.notion.com/mcp"`,
-  then complete the OAuth prompt.
-
-Authorize access to the dashboard and tracker. Reconnect or restart the client if
-needed, then verify the Notion tools can fetch both before attempting updates.
-Do not put OAuth tokens in the dashboard configuration or this repository.
-
-Keep workspace-specific settings in `~/.dashboard.json`, outside this repository.
-Do not overwrite an existing configuration.
-
-**Linux / macOS / Git Bash:**
-
-```sh
-cp -n skills/dashboard/dashboard.example.json ~/.dashboard.json
-chmod 600 ~/.dashboard.json
-```
-
-**PowerShell:**
-
-```powershell
-$configPath = Join-Path $HOME '.dashboard.json'
-if (-not (Test-Path $configPath)) {
-    Copy-Item skills/dashboard/dashboard.example.json $configPath
-}
-```
-
-On Windows, use the file's Properties → Security settings to restrict access to
-your account and required system administrators. `chmod` is not available in
-PowerShell.
-
-Replace the example's `dashboard_url` with your Notion dashboard URL. Optionally set
-`tracker_data_source_url` to the tracker's `collection://...` URL and list exact project
-names in `excluded_projects`. Otherwise the skill discovers the tracker from the page
-and follows its maintenance conventions. If several trackers exist, it asks you to
-choose rather than guessing. Each machine can point to a different dashboard.
-
-The skill preserves embedded databases and maintenance conventions, updates tracker
-rows before dashboard summaries, and checks live evidence before marking work done.
-See [`skills/dashboard/SKILL.md`](skills/dashboard/SKILL.md) for the layout and schema.
-It does not automatically create a Notion dashboard. A differently named local
-dashboard skill is left in place for a later migration.
-
-**Existing skill named `dashboard`:** before running either installer, move any
-local `dashboard` directory and its `dashboard.bak` copies to a backup directory
-outside all skill roots, such as `~/.local/share/skill-backups/`. Check each root
-you use: `~/.claude/skills/`, `~/.codex/skills/`, `~/.pi/agent/skills/`, and
-`~/.config/opencode/skills/`. Existing symlinks to this repo can stay. The installers
-otherwise replace a same-named local directory with a repo symlink and leave a
-`.bak` directory inside the discovery path, which can expose two skills with the
-same frontmatter name. Archive first, configure `~/.dashboard.json`, then install
-the public skill. Do not remove a differently named local skill until you have
-verified the new workflow.
 
 ## Skill Discoverability
 
