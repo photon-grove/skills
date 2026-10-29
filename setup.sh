@@ -40,7 +40,18 @@ render_skill_index() {
       frontmatter="$(sed -n '/^---$/,/^---$/p' "$skill_dir/SKILL.md")"
       local name description arg_hint
       name="$(printf '%s\n' "$frontmatter" | sed -n 's/^name:[[:space:]]*//p' | head -1)"
-      description="$(printf '%s\n' "$frontmatter" | sed -n 's/^description:[[:space:]]*//p' | head -1)"
+      # Folded/literal block scalars (`description: >-`) continue on indented lines; join them.
+      description="$(printf '%s\n' "$frontmatter" | awk '
+        done { next }
+        /^description:/ {
+          v = $0; sub(/^description:[[:space:]]*/, "", v)
+          if (v ~ /^[>|][-+]?$/) { block = 1; v = ""; next }
+          print v; done = 1; next
+        }
+        block && /^[[:space:]]/ { l = $0; sub(/^[[:space:]]+/, "", l); v = (v == "" ? l : v " " l); next }
+        block { print v; block = 0; done = 1 }
+        END { if (block) print v }
+      ')"
       arg_hint="$(printf '%s\n' "$frontmatter" | sed -n 's/^argument-hint:[[:space:]]*//p' | head -1)"
       [ -n "$name" ] || name="$skill_name"
       [ -n "$arg_hint" ] || arg_hint="-"
