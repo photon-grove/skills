@@ -15,11 +15,11 @@ description: >-
 
 The goal: a reviewer should grasp **why** the change exists and **what** it does in well under a minute, and reach the actual evidence (code, metrics, prior art) in one click — not read paragraphs that re-narrate the diff. Prose is expensive; a precise link is cheap and authoritative. Lean on links so you don't have to *tell* when you can *show*.
 
-This produces the PR body only. For title format, draft-vs-ready, branch hygiene, and what to omit, defer to the repo's `AGENTS.md` / `CONTRIBUTING.md` — they win over anything here.
+This produces the PR body only. For title format, draft-vs-ready, branch hygiene, and what to omit, defer to the repo's `AGENTS.md` / `CONTRIBUTING.md` and PR template — they win over anything here. Keep any sections, checklists, or metadata the template requires.
 
 ## Structure
 
-Two short headed sections by default. Add a third only if it earns its place.
+Two short headed sections by default, plus any the repo's PR template requires. Add a third only if it earns its place. If the body needs scrolling, cut prose before adding anything.
 
 ```markdown
 ## Summary
@@ -39,7 +39,7 @@ Why this shape: **Summary answers "why should I care / what problem"**, **Change
 
 Every time you're about to *describe* something concrete, link to it instead.
 
-- **Code** — link to the exact lines, pinned to a commit SHA so the anchors don't drift as the branch moves. Resolve once with `git rev-parse HEAD`, find lines with `grep -n`, then:
+- **Code** — link to the exact lines, pinned to a commit SHA so the anchors don't drift as the branch moves. Take the SHA from the PR's pushed head, not just your checkout: for a new PR, push first, then `git rev-parse HEAD`; for an existing PR, `gh pr view <n> --json headRefOid,headRepository`, and link into that head repository (a fork's commits aren't in the base repo). Find lines with `grep -n` in a tree at that SHA, then:
   `https://github.com/<org>/<repo>/blob/<full-sha>/<path>#L<line>` (range: `#L10-L24`).
   Pinning to a branch name instead of a SHA means line anchors rot on the next push — use the SHA.
 - **Many call sites** — don't list them in prose; enumerate as terse numbered links: `… at the engine's five reads ([1](url), [2](url), [3](url), [4](url), [5](url))`.
@@ -99,4 +99,4 @@ What makes it work: a newcomer learns the domain and the why in the first senten
 
 - Generate the code links *before* writing the prose — resolve the SHA and grep the line numbers first, then write around them. It's faster than retrofitting links and keeps you honest about "show, don't tell".
 - If you push more commits, line anchors pinned to the old SHA drift — refresh the links (or re-pin to the new head) before requesting review.
-- Editing an existing PR body: keep the same two-section spine, replace prose with links, and delete any routine-validation section.
+- Editing an existing PR body: keep the same two-section spine (plus any template-required sections), replace prose with links, and delete any routine-validation section.
