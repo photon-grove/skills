@@ -48,6 +48,7 @@ render_skill_index() {
           if (v ~ /^[>|][-+]?$/) { block = 1; v = ""; next }
           print v; done = 1; next
         }
+        block && /^[[:space:]]*$/ { next }
         block && /^[[:space:]]/ { l = $0; sub(/^[[:space:]]+/, "", l); v = (v == "" ? l : v " " l); next }
         block { print v; block = 0; done = 1 }
         END { if (block) print v }

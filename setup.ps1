@@ -77,8 +77,17 @@ function Get-FrontmatterValue {
             }
 
             $parts = @()
-            for ($j = $i + 1; $j -lt $lines.Count -and $lines[$j] -match '^\s+(.*)$'; $j++) {
-                $parts += $Matches[1]
+            for ($j = $i + 1; $j -lt $lines.Count; $j++) {
+                if ($lines[$j] -match '^\s*$') {
+                    continue
+                }
+
+                if ($lines[$j] -match '^\s+(.*)$') {
+                    $parts += $Matches[1]
+                    continue
+                }
+
+                break
             }
             return ($parts -join ' ')
         }
