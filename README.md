@@ -77,7 +77,7 @@ PowerShell installers (`setup.ps1`, `install-skill.ps1`) currently target `~/.cl
 |-------|---------|-------------|
 | **AWS Cost Check** | `/aws-cost-check` | Discovers AWS resources, attributes spend, and flags runaway costs, errors, and anomalies |
 | **Optimize Tests** | `/optimize-tests` | Audits, removes, consolidates, and rewrites tests for higher confidence per maintenance cost |
-| **PR Description** | `/pr-description` | Writes concise PR bodies with commit-pinned evidence links |
+| **PR Description** | `/pr-description` | Writes concise, link-heavy, scannable PR bodies that link code and evidence instead of describing them |
 | **Shepherd to Merge** | `/shepherd-to-merge` | Single-PR or sequential queue mode: reviews, fixes feedback, rebases, and auto-merges |
 | **Unslop** | `/unslop` | Detects and rewrites generic, overly polished, or AI-sounding prose while preserving meaning |
 

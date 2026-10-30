@@ -67,9 +67,29 @@ function Get-FrontmatterValue {
     }
 
     $frontmatter = $Matches[1]
-    foreach ($line in ($frontmatter -split "`r?`n")) {
-        if ($line -match "^$Key:\s*(.+)$") {
-            return $Matches[1]
+    $lines = $frontmatter -split "`r?`n"
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match "^$Key:\s*(.+)$") {
+            $value = $Matches[1]
+            # Folded/literal block scalars (`description: >-`) continue on indented lines; join them.
+            if ($value -notmatch '^[>|][-+]?$') {
+                return $value
+            }
+
+            $parts = @()
+            for ($j = $i + 1; $j -lt $lines.Count; $j++) {
+                if ($lines[$j] -match '^\s*$') {
+                    continue
+                }
+
+                if ($lines[$j] -match '^\s+(.*)$') {
+                    $parts += $Matches[1]
+                    continue
+                }
+
+                break
+            }
+            return ($parts -join ' ')
         }
     }
     return ''
